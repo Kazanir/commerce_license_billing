@@ -1,0 +1,16 @@
+name = Commerce License Billing
+description = Provides advanced recurring billing for licenses.
+package = Commerce (contrib)
+core = 7.x
+configure = admin/commerce/config/license-billing
+dependencies[] = advancedqueue
+dependencies[] = commerce_license
+dependencies[] = commerce_order
+dependencies[] = bundleswitcher
+dependencies[] = date
+dependencies[] = list
+
+; Classes includes
+files[] = plugins/billing_cycle_engine/base.inc
+files[] = includes/commerce_license_billing.cycle_type_ui.inc
+files[] = includes/commerce_license_billing.cycle.inc
