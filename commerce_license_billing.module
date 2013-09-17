@@ -198,6 +198,126 @@ function commerce_license_billing_get_license_billing_cycle($license) {
 }
 
 /**
+ * Implements hook_commerce_license_presave().
+ *
+ * Ensures that a new license revision is created on product or status changes.
+ */
+function commerce_license_billing_commerce_license_presave($license) {
+  if (empty($license->original) || $license->status < COMMERCE_LICENSE_ACTIVE) {
+    // The license is new, or hasn't been activated yet.
+    return;
+  }
+
+  $product_changed = ($license->product_id != $license->original->product_id);
+  $status_changed = ($license->status != $license->original->status);
+  if ($product_changed || $status_changed) {
+    $license->is_new_revision = TRUE;
+  }
+}
+
+/**
+ * Changes the license plan.
+ *
+ * @todo
+ * Allow the plan change to be queued until the end of the cycle, and do it
+ * by default for prepaid cycles.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $product_id
+ *   The product_id of the new plan.
+ */
+function commerce_license_billing_change_plan($license, $product_id) {
+  if ($license->wrapper->product->cl_billing_type->value() == 'prepaid') {
+    // We don't support changing plans for prepaid products for now.
+    return;
+  }
+
+  // Change the plan, and trigger a synchronization.
+  $license->product_id = $product_id;
+  $license->save();
+  if ($license instanceof CommerceLicenseSynchronizableInterface) {
+    commerce_license_enqueue_sync($license);
+  }
+}
+
+/**
+ * Returns the license plan history for an open billing cycle.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $billing_cycle
+ *   The billing cycle entity.
+ *
+ * @return
+ *   An array of history records in the following format:
+ *   - revision_id: The revision_id of the history record.
+ *   - product_id: The id of the product representing the plan.
+ *   - start: The start timestamp.
+ *   - end: The end timestamp.
+ */
+function commerce_license_billing_plan_history_list($license, $billing_cycle) {
+  $history = &drupal_static(__FUNCTION__, array());
+  if (!isset($history[$license->license_id])) {
+    // Fetch revisions that started or ended in this billing cycle, or are still
+    // in progress.
+    $cycle_duration = array($billing_cycle->start, $billing_cycle->end);
+    $or = db_or();
+    $or->condition('revision_created', $cycle_duration, 'BETWEEN');
+    $or->condition('revision_ended', $cycle_duration, 'BETWEEN');
+    $or->condition('revision_ended', 0);
+
+    $query = db_select('commerce_license_revision', 'clr');
+    $query->addField('clr', 'revision_id');
+    $query->addField('clr', 'product_id');
+    $query->addField('clr', 'status');
+    $query->addField('clr', 'revision_created', 'start');
+    $query->addField('clr', 'revision_ended', 'end');
+    $query->condition('license_id', $license->license_id);
+    $query->condition('status', COMMERCE_LICENSE_ACTIVE);
+    $query->condition($or);
+    $license_history = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
+
+    // Merge any records with the same product_id and status that are right
+    // next to each other (edge case when a revision wasn't created for a
+    // product_id or status change, but for another purpose).
+    $previous_index = NULL;
+    foreach ($license_history as $index => $history_record) {
+      if (!isset($previous_index)) {
+        $previous_index = $index;
+        continue;
+      }
+
+      $previous_record = $license_history[$previous_index];
+      $products_match = ($history_record['product_id'] == $previous_record['product_id']);
+      $statuses_match = ($history_record['status'] == $previous_record['status']);
+      $times_match = ($history_record['start'] - $previous_record['end'] === 1);
+      if ($products_match && $statuses_match && $times_match) {
+        $license_history[$previous_index]['end'] = $history_record['end'];
+        unset($license_history[$index]);
+        continue;
+      }
+      $previous_index = $index;
+    }
+
+    // Adjust the start and end timestamps for the current billing cycle.
+    foreach ($license_history as &$history_record) {
+      if ($history_record['start'] < $billing_cycle->start) {
+        $history_record['start'] = $billing_cycle->start;
+      }
+      if (empty($history_record['end'])) {
+        $history_record['end'] = $billing_cycle->end;
+      }
+    }
+
+    // Add the data to the static cache.
+    $history[$license->license_id] = $license_history;
+  }
+
+  return $history[$license->license_id];
+}
+
+/**
  * Ensures that the license product types have the required billing fields.
  *
  * Fields:

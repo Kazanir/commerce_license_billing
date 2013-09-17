@@ -24,6 +24,26 @@ Any license type can be used for recurring billing without changes.
 A license is considered billable if its product has a billing cycle type
 selected.
 
+By default, licenses are revisionable, but changes to a license don't create
+new revisions. Commerce License Billing changes that logic for billable licenses,
+ensuring that a new revision is created for status or product_id changes
+(this is essential for later pricing and prorating).
+
+Plan-based billing
+------------------
+Each license has one plan at a given point of time, which is the referenced product.
+
+Licenses are revisionable, and Commerce License Billing modifies the default
+behavior so that new revisions are always created for product_id (plan) and
+status changes. Each revision has a `revision_created` and `revision_ended` timestamp.
+The `revision_ended` timestamp is 0 for the current revision.
+The timestamps are used to prorate the price of each plan that was active
+during the billing cycle.
+
+Only revisions with status `COMMERCE_LICENSE_ACTIVE` are priced, so if a license
+was inactive for a week, that period won't be priced since that revision will
+be ignored.
+
 Billing cycle types
 -------------------
 Billing cycle types are exportable entities managed on admin/config/licenses/billing-cycle-types.
