@@ -169,6 +169,35 @@ function commerce_license_billing_flush_caches() {
 }
 
 /**
+ * Returns the billing cycle for the given license.
+ *
+ * @param $license
+ *   The license entity.
+ *
+ * @return
+ *   A billing cycle entity, or FALSE if none found.
+ */
+function commerce_license_billing_get_license_billing_cycle($license) {
+  // Load a line item that references the license.
+  $query = new EntityFieldQuery;
+  $query
+    ->entityCondition('entity_type', 'commerce_line_item')
+    ->entityCondition('bundle', 'recurring')
+    ->fieldCondition('cl_billing_license', 'target_id', $license->license_id)
+    ->range(0, 1);
+  $result = $query->execute();
+  if ($result) {
+    $line_item_id = key($result['commerce_line_item']);
+    $line_item = commerce_line_item_load($line_item_id);
+    $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+    return $line_item_wrapper->order->cl_billing_cycle->value();
+  }
+  else {
+    return FALSE;
+  }
+}
+
+/**
  * Ensures that the license product types have the required billing fields.
  *
  * Fields:
