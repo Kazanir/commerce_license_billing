@@ -24,6 +24,9 @@ Any license type can be used for recurring billing without changes.
 A license is considered billable if its product has a billing cycle type
 selected.
 
+If the license type wants to have metered billing, it must implement the
+`CommerceLicenseBillingUsageInterface` interface.
+
 By default, licenses are revisionable, but changes to a license don't create
 new revisions. Commerce License Billing changes that logic for billable licenses,
 ensuring that a new revision is created for status or product_id changes
@@ -43,6 +46,50 @@ during the billing cycle.
 Only revisions with status `COMMERCE_LICENSE_ACTIVE` are priced, so if a license
 was inactive for a week, that period won't be priced since that revision will
 be ignored.
+
+Metered (usage-based) billing
+-----------------------------
+If a license type implements the `CommerceLicenseBillingUsageInterface` interface
+and declares its usage groups, the module will allow usage to be
+registered and calculated for each usage group separately, and charge for it
+at the end of the billing cycle.
+
+Usage is reported asynchronously, and it is your job to call
+`commerce_license_billing_usage_add()` and register usage (after an API call
+received through Services, or after contacting the service yourself on cron, etc).
+
+There are two types of usage groups: counter and gauge.
+
+- The counter tracks usage over time, and is always charged for in total.
+For example if the following bandwidth usage was reported:
+`Jan 1st - Jan 15th; 1024` and `Jan 15th - Jan 31st; 128`, there
+will be one line item, charging for 1052mb of usage.
+
+- The gauge tracks discrete usage values over time, and each
+value is charged for separately. For example, if the following env
+usage is reported `Jan 1st - Jan 15th; 2` and `Jan 15th - Jan 31st; 4`,
+there will be two prorated line items, charging for 2 and 4 environments.
+The gauge type also allows for open-ended usage (`immediate => TRUE`), in which
+case it is carried over into the next billing cycles.
+
+A usage group can also define `free_quantity`, the quantity provided for free
+with the license. Only usage exceeding this quantity will be charged for.
+For counters this means that the free quantity is subtracted from the total quantity.
+For gauges this means that the gauge values that equal free_quantity are ignored.
+
+The `free_quantity` value can be hardcoded, or taken from the license's product
+(making it plan-based, which is a common use case, with Plan A providing one quantity
+for free, and Plan B providing another quantity for free).
+The module makes sure to price the usage according to the plan that was active
+at the time.
+
+See:
+
+- `CommerceLicenseBillingUsageInterface`
+- `commerce_license_billing_usage_add()`
+- `commerce_license_billing_usage_clear()`
+- `commerce_license_billing_current_usage()`
+- `commerce_license_billing_usage_history_list()`
 
 Billing cycle types
 -------------------

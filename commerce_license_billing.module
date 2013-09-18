@@ -318,6 +318,157 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
 }
 
 /**
+ * Adds a usage record for the specified license and usage group.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $group
+ *   The usage group, as defined by $license->usageGroups().
+ * @param $quantity
+ *   The usage quantity.
+ * @param $start
+ *   The unix timestamp when usage started. Optional if the usage group
+ *   specified "immediate" => TRUE, otherwise required.
+ * @param $end
+ *   The unix timestamp when usage ended. Optional if the usage group
+ *   specified "immediate" => TRUE, otherwise required.
+ */
+function commerce_license_billing_usage_add($license, $group, $quantity, $start = NULL, $end = NULL) {
+  $usage_groups = $license->usageGroups();
+  if (!isset($usage_groups[$group])) {
+    throw new Exception('Invalid usage group specified for commerce_license_billing_usage_add().');
+  }
+  $usage_group = $usage_groups[$group];
+  if (empty($usage_group['immediate']) && (!$start || !$end)) {
+    throw new Exception('Empty $start or $end timestamps in commerce_license_billing_usage_add().');
+  }
+  // If usage reporting for this group is immediate, it is safe to initialize
+  // $start to current time.
+  if (!empty($usage_group['immediate']) && !$start) {
+    $start = REQUEST_TIME;
+  }
+
+  // If a gauge just changed, close the previous usage record.
+  if ($usage_group['type'] == 'gauge' && !empty($usage_group['immediate'])) {
+    $previous_end = $start - 1;
+    db_update('cl_billing_usage')
+      ->fields(array(
+        'end' => $previous_end,
+      ))
+      ->condition('license_id', $license->license_id)
+      ->condition('usage_group', $group)
+      ->condition('end', 0)
+      ->execute();
+  }
+
+  db_insert('cl_billing_usage')
+    ->fields(array(
+      'license_id' => $license->license_id,
+      'usage_group' => $group,
+      'quantity' => $quantity,
+      'start' => $start,
+      'end' => (int) $end,
+    ))
+    ->execute();
+}
+
+/**
+ * Clears closed usage records for the provided license and usage group.
+ *
+ * @param  $license
+ *   The license entity.
+ * @param $group
+ *   (Optional) The usage group, as defined by $license->usageGroups().
+ */
+function commerce_license_billing_usage_clear($license, $group = NULL) {
+  $delete = db_delete('cl_billing_usage');
+  $delete->condition('license_id', $license->license_id);
+  $delete->condition('end', 0, '!=');
+  if ($group) {
+    $delete->condition('usage_group', $group);
+  }
+  $delete->execute();
+}
+
+/**
+ * Returns the current usage for the provided license and usage group.
+ *
+ * If the usage group is of type 'counter', the total usage is returned.
+ * If the usage group is of type 'gauge', the last reported usage is returned.
+ *
+ * @param  $license
+ *   The license entity.
+ * @param $group
+ *   The usage group, as defined by $license->usageGroups().
+ *
+ * @return
+ *   The numeric usage amount.
+ */
+function commerce_license_billing_current_usage($license, $group) {
+  $usage_groups = $license->usageGroups();
+  if (!isset($usage_groups[$group])) {
+    throw new Exception('Invalid usage group specified for commerce_license_billing_current_usage().');
+  }
+  $usage_group = $usage_groups[$group];
+
+  $data = array(
+    ':license_id' => $license->license_id,
+    ':group' => $group,
+  );
+  if ($usage_group['type'] == 'counter') {
+    $usage = db_query("SELECT SUM(quantity) FROM {cl_billing_usage}
+                    WHERE license_id = :license_id AND usage_group = :group
+                      GROUP BY license_id, usage_group", $data)->fetchColumn();
+  }
+  elseif ($usage_group['type'] == 'gauge') {
+    $usage = db_query("SELECT quantity FROM {cl_billing_usage}
+                    WHERE license_id = :license_id AND usage_group = :group
+                      ORDER BY start DESC LIMIT 1", $data)->fetchColumn();
+  }
+
+  return (int) $usage;
+}
+
+/**
+ * Returns the license usage history for an open billing cycle.
+ *
+ * @param  $license
+ *   The license entity.
+ * @param $billing_cycle
+ *   The billing cycle entity.
+ *
+ * @return
+ *   An array of usage records in the following format:
+ *   - product_id: The id of the product representing the plan.
+ *   - start: The start timestamp.
+ *   - end: The end timestamp.
+ */
+function commerce_license_billing_usage_history_list($license, $billing_cycle) {
+  $history = &drupal_static(__FUNCTION__, array());
+  if (empty($history[$license->license_id])) {
+    $query = db_select('cl_billing_usage', 'bu');
+    $query
+      ->fields('bu', array('usage_group', 'quantity', 'start', 'end'))
+      ->condition('license_id', $license->license_id)
+      ->orderBy('start', 'ASC');
+    $usage_history = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
+    // Adjust the start and end timestamps for the current billing cycle.
+    foreach ($usage_history as $index => &$usage_record) {
+      if ($usage_record['start'] < $billing_cycle->start) {
+        $usage_record['start'] = $billing_cycle->start;
+      }
+      if (empty($usage_record['end'])) {
+        $usage_record['end'] = $billing_cycle->end;
+      }
+    }
+
+    $history[$license->license_id] = $usage_history;
+  }
+
+  return $history[$license->license_id];
+}
+
+/**
  * Ensures that the license product types have the required billing fields.
  *
  * Fields:

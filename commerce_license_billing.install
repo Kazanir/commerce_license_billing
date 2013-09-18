@@ -101,6 +101,49 @@ function commerce_license_billing_schema() {
     ),
     'primary key' => array('billing_cycle_type_id'),
   );
+  $schema['cl_billing_usage'] = array(
+    'description' => 'The base table for tracking license usage.',
+    'fields' => array(
+      'usage_id' => array(
+        'description' => 'The primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'license_id' => array(
+        'description' => 'The id of the license.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'usage_group' => array(
+        'description' => 'The usage group, as defined in $license->usageGroups().',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'quantity' => array(
+        'description' => 'The usage quantity.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'start' => array(
+        'description' => 'The Unix timestamp when usage began.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'end' => array(
+        'description' => 'The Unix timestamp when usage ended.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('usage_id'),
+  );
 
   return $schema;
 }
