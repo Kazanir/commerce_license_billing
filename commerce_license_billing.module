@@ -169,6 +169,165 @@ function commerce_license_billing_flush_caches() {
 }
 
 /**
+ * Creates recurring orders for licenses in the provided order.
+ *
+ * The provided order is first scanned, and all licensable products are
+ * gathered. Their billing cycle types are gathered, and the appropriate
+ * billing cyles are opened (if they haven't been previously).
+ * An order per billing cycle is created (if it hasn't been previously),
+ * and the new line items are added.
+ *
+ * @param $order
+ *   The order to use as a base of the new recurring orders.
+ */
+function commerce_license_billing_create_recurring_orders($order) {
+  // Group licenses by billing cycle type.
+  $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+  $billing_cycle_type_ids = array();
+  $grouped_licenses = array();
+  foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
+    if (!empty($line_item_wrapper->value()->commerce_license)) {
+      $product_wrapper = $line_item_wrapper->commerce_product;
+      if (!empty($product_wrapper->value()->cl_billing_cycle_type)) {
+        $billing_cycle_type_id = $product_wrapper->cl_billing_cycle_type->raw();
+        $billing_cycle_type_ids[] = $billing_cycle_type_id;
+        $grouped_licenses[$billing_cycle_type_id][] = $line_item_wrapper->commerce_license->value();
+      }
+    }
+  }
+  // Load all found billing cycle types.
+  $billing_cycle_types = entity_load('cl_billing_cycle_type', $billing_cycle_type_ids);
+
+  foreach ($grouped_licenses as $billing_cycle_type_id => $licenses) {
+    // Open a billing cycle.
+    $billing_cycle_type = $billing_cycle_types[$billing_cycle_type_id];
+    $billing_cycle = $billing_cycle_type->getBillingCycle($order->uid);
+    // Sync the license timestamps with the billing cycle timestamps.
+    foreach ($licenses as $license) {
+      $license->granted = $billing_cycle->start;
+      $license->expires = $billing_cycle->end;
+      $license->save();
+    }
+
+    // Check if there's an existing order attached to that billing cycle.
+    $query = new EntityFieldQuery();
+    $query
+      ->entityCondition('entity_type', 'commerce_order')
+      ->entityCondition('bundle', 'recurring')
+      ->propertyCondition('status', 'recurring_open')
+      ->propertyCondition('uid', $order->uid)
+      ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle->billing_cycle_id);
+    $results = $query->execute();
+    if (!empty($results['commerce_order'])) {
+      $recurring_order_id = key($results['commerce_order']);
+      $recurring_order = commerce_order_load($recurring_order_id);
+      $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
+      // Generate a base line item for each license.
+      $existing_line_items = $recurring_order_wrapper->commerce_line_items->value();
+      $line_items = array();
+      foreach ($licenses as $license) {
+        $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order_id);
+      }
+      $recurring_order_wrapper->commerce_line_items = array_merge($existing_line_items, $line_items);
+      $recurring_order_wrapper->save();
+    }
+    else {
+      commerce_license_billing_generate_recurring_order($order, $billing_cycle, $licenses);
+    }
+  }
+}
+
+/**
+ * Generates a new recurring order.
+ *
+ * @param $previous_order
+ *   The previous order.
+ * @param $billing_cycle
+ *   The billing cycle for the new order.
+ * @param $licenses
+ *   An array of licenses added to the new order.
+ *
+ * @return
+ *   The newly created and saved recurring order.
+ */
+function commerce_license_billing_generate_recurring_order($previous_order, $billing_cycle, $licenses) {
+  $previous_order_wrapper = entity_metadata_wrapper('commerce_order', $previous_order);
+  // Create a new order and save it immediately to get the order_id.
+  $recurring_order = commerce_order_new($previous_order->uid, 'recurring_open', 'recurring');
+  commerce_order_save($recurring_order);
+
+  $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
+  $recurring_order_wrapper->commerce_customer_billing = $previous_order_wrapper->commerce_customer_billing->value();
+  $recurring_order_wrapper->cl_billing_cycle = $billing_cycle;
+  // Generate a base line item for each license.
+  // If this is the first recurring order, licenses of all statuses are taken,
+  // since they haven't been activated yet. However, if the previous order was
+  // also recurring, only active licenses are taken since the revoked / expired
+  // ones have already been charged for.
+  $active_only = ($previous_order->type == 'recurring');
+  $line_items = array();
+  foreach ($licenses as $license) {
+    if ($active_only && $license->status != COMMERCE_LICENSE_ACTIVE) {
+      continue;
+    }
+    $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order->order_id);
+  }
+  $recurring_order_wrapper->commerce_line_items = $line_items;
+  $recurring_order_wrapper->save();
+
+  return $recurring_order;
+}
+
+/**
+ * Generates the recurring line item for the base product of a license.
+ *
+ * Takes into account whether the product is prepaid or postpaid.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $billing_cycle
+ *   The billing cycle entity.
+ * @param $order_id
+ *   The order_id to be set on the newly created line items.
+ *
+ * @return
+ *   The newly created and saved line item.
+ */
+function commerce_license_billing_generate_base_line_item($license, $billing_cycle, $order_id) {
+  $product_wrapper = $license->wrapper->product;
+  // Charge for the base product, there's no usage at this point.
+  $line_item = commerce_line_item_new('recurring', $order_id);
+  $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+  $line_item_wrapper->line_item_label = $product_wrapper->title->value();
+  $line_item_wrapper->commerce_product = $product_wrapper->value();
+  $line_item_wrapper->quantity = 1;
+  $line_item_wrapper->cl_billing_license = $license;
+
+  $line_item_wrapper->commerce_unit_price = $license->wrapper->product->commerce_price->value();
+  if ($product_wrapper->cl_billing_type->value() == 'prepaid') {
+    // In case of prepaid, the line item always charges for the next
+    // billing cycle. So if the just opened billing cycle is "February",
+    // the line item needs to charge for March.
+    $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
+    $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
+    $line_item_wrapper->cl_billing_start = $next_billing_cycle->start;
+    $line_item_wrapper->cl_billing_end = $next_billing_cycle->end;
+  }
+  elseif ($product_wrapper->cl_billing_type->value() == 'postpaid') {
+    // In case of postpaid, the line item always charges for the current
+    // billing cycle.
+    $line_item_wrapper->cl_billing_start = $billing_cycle->start;
+    $line_item_wrapper->cl_billing_end = $billing_cycle->end;
+  }
+  // Trigger price calculation to get any needed discounts or price changes.
+  rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
+  // Save the line item.
+  $line_item_wrapper->save();
+
+  return $line_item_wrapper->value();
+}
+
+/**
  * Estimate the cost of a license with the given plan and usage.
  *
  * @param $license_type
