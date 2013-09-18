@@ -1,0 +1,15 @@
+<?php
+
+/**
+ * @file
+ * Provides example license types for testing billing.
+ */
+
+/**
+ * Implements hook_ctools_plugin_directory().
+ */
+function commerce_license_billing_test_ctools_plugin_directory($owner, $plugin_type) {
+  if ($owner == 'commerce_license') {
+    return "plugins/$plugin_type";
+  }
+}

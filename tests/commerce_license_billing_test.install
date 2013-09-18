@@ -1,0 +1,37 @@
+<?php
+
+/**
+ * Implements hook_install().
+ *
+ * Creates the products referenced in the license type usage groups.
+ */
+function commerce_license_billing_test_install() {
+  $product_types = commerce_product_types();
+  if (empty($product_types['product'])) {
+    // Our prefered product type is missing, so there's nothing more to do.
+    return;
+  }
+  // Call configure product type to add the commerce_price field.
+  commerce_product_configure_product_type('product');
+  $product = commerce_product_new('product');
+  $product->uid = 1;
+  $product->title = 'Development environments';
+  $product->sku = 'BILLING-TEST-ENV';
+  $product->status = 1;
+  $product->commerce_price[LANGUAGE_NONE][0] = array(
+    'amount' => 1000,
+    'currency_code' => 'USD',
+  );
+  commerce_product_save($product);
+
+  $product = commerce_product_new('product');
+  $product->uid = 1;
+  $product->title = 'Bandwidth';
+  $product->sku = 'BILLING-TEST-BANDWIDTH';
+  $product->status = 1;
+  $product->commerce_price[LANGUAGE_NONE][0] = array(
+    'amount' => 10,
+    'currency_code' => 'USD',
+  );
+  commerce_product_save($product);
+}

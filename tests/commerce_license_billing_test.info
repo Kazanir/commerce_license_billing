@@ -1,0 +1,8 @@
+name = Commerce License Billing test module
+description = Support module for Commerce License Billing testing.
+package = Testing
+version = VERSION
+core = 7.x
+hidden = TRUE
+dependencies[] = commerce_license_billing
+dependencies[] = commerce_product_ui
