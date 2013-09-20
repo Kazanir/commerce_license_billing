@@ -32,6 +32,43 @@ new revisions. Commerce License Billing changes that logic for billable licenses
 ensuring that a new revision is created for status or product_id changes
 (this is essential for later pricing and prorating).
 
+Prepaid billing
+---------------
+Prepaid products are paid up front.
+
+That means that if a customer registers on April 1st, he will immediately pay the
+monthly fee for April. On the first day of May, he will be charged for the
+april usage (if any), and the monthly fee for May. If on May 15h he cancels
+his subscription, on the first day of June he will only pay the usage for May.
+
+The other half of the May monthly fee will not be refunded, since that is
+not currently implemented (a common strategy being to award the customer
+points to be used for discounting future purchases).
+
+Postpaid billing
+----------------
+Postpaid products are paid at the end of the billing cycle.
+
+That means that if the customer registers on April 1st, his order is free and he pays
+nothing. On the first day of May, he will be charged for the April monthly fee,
+and the april usage (if any). If on May 15th he cancels his subscription, on the
+first day of June he will pay the prorated montly fee for May, and the usage
+for May.
+
+Prorated payments
+-----------------
+A prorated payment is a payment proportional to the duration of the usage.
+So, if the billing cycle is two weeks, but the plan was used for one week,
+only half of the plan's price will be set on the line item.
+
+The usage records have `start` and `end` timestamps.
+Plans are priced by examining license revisions, each of which has
+a `revision_created` and `revision_ended` timestamp, used the same way.
+
+If the end timestamp is 0, it is assumed that the record is still active / in progress,
+so the end of the billing cycle is taken as the end instead, in order to give a cost estimation.
+The duration (end - start) is compared to the billing cycle duration, and the record is priced proportionally.
+
 Plan-based billing
 ------------------
 Each license has one plan at a given point of time, which is the referenced product.
@@ -90,6 +127,13 @@ See:
 - `commerce_license_billing_usage_clear()`
 - `commerce_license_billing_current_usage()`
 - `commerce_license_billing_usage_history_list()`
+
+Recurring order refresh
+-----------------------
+The recurring order is refreshed each time it is loaded (`hook_commerce_order_load()`),
+updating the line items (quantities, prices) based on the latest plan history and usage.
+
+The start and end timestamps on the line items are maintained.
 
 Billing cycle types
 -------------------

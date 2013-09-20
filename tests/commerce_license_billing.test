@@ -92,6 +92,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     if ($checkout_success !== FALSE) {
       $this->planTest();
       $this->usageTest();
+      $this->orderRefreshTest();
     }
   }
 
@@ -252,6 +253,141 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     // Confirm the correct current usage.
     $current_usage = commerce_license_billing_current_usage($license, 'bandwidth');
     $this->assertEqual($current_usage, 3072, 'Current bandwidth usage matches total reported quantity');
+  }
+
+  /**
+   * Tests the recurring order refresh and its pricing logic.
+   */
+  protected function orderRefreshTest() {
+    $prepaid_license = $this->getLicense('prepaid');
+    $postpaid_license = $this->getLicense('postpaid');
+
+    // Tweak the revisions so that the plan changes can be prorated.
+    // First plan: 1/4 of the billing cycle, second plan 2/4, suspend 1/8,
+    // reactive second plan 1/8.
+    $billing_cycle_duration = $this->billing_cycle->end - $this->billing_cycle->start;
+    $duration_part = ($billing_cycle_duration + 1) / 8;
+    $first_plan_start = $this->billing_cycle->start;
+    $second_plan_start = $first_plan_start + ($duration_part * 2);
+    $suspension_start = $first_plan_start + ($duration_part * 4);
+    $reactivation_start = $first_plan_start + ($duration_part * 7);
+    $plan_durations = array();
+    $plan_durations[] = array($first_plan_start, $second_plan_start - 1);
+    $plan_durations[] = array($second_plan_start, $suspension_start - 1);
+    $plan_durations[] = array($suspension_start, $reactivation_start - 1);
+    $plan_durations[] = array($reactivation_start, 0);
+
+    // The postpaid license has already had a plan shift from A to B, so
+    // there are two revisions that should be updated.
+    $data = array(
+      'license_id' => $postpaid_license->license_id,
+      'status' => COMMERCE_LICENSE_ACTIVE,
+    );
+    $revision_ids = db_query('SELECT revision_id from {commerce_license_revision}
+                                WHERE license_id = :license_id AND status = :status
+                                  ORDER BY revision_id ASC', $data)->fetchAll(PDO::FETCH_ASSOC);
+    db_update('commerce_license_revision')
+      ->fields(array(
+        'revision_created' => $plan_durations[0][0],
+        'revision_ended' => $plan_durations[0][1],
+      ))
+      ->condition('revision_id', $revision_ids[0]['revision_id'])
+      ->execute();
+    db_update('commerce_license_revision')
+      ->fields(array(
+        'revision_created' => $plan_durations[1][0],
+        // Since the second revision is still active, its end should be 0.
+        'revision_ended' => 0,
+      ))
+      ->condition('revision_id', $revision_ids[1]['revision_id'])
+      ->execute();
+
+    // Trigger an order refresh.
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'commerce_order')
+      ->entityCondition('bundle', 'recurring')
+      ->fieldCondition('cl_billing_cycle', 'target_id', $this->billing_cycle->billing_cycle_id);
+    $result = $query->execute();
+    $order_id = key($result['commerce_order']);
+    drupal_static_reset('commerce_license_billing_plan_history_list');
+    $recurring_order = commerce_order_load($order_id);
+
+    // Build an array of expected line items.
+    $next_billing_cycle = $this->billing_cycle_type->getNextBillingCycle($this->billing_cycle);
+    $expected_line_items = array();
+    // The prepaid product.
+    $expected_line_items[] = array(
+      'title' => 'prepaid base product',
+      'product_id' => $this->prepaid_product->product_id,
+      'price' => $this->prepaid_product->commerce_price[LANGUAGE_NONE][0]['amount'],
+      'start' => $next_billing_cycle->start,
+      'end' => $next_billing_cycle->end,
+    );
+    // The plans of the postpaid product.
+    $expected_line_items[] = array(
+      'title' => 'postpaid base product (plan A)',
+      'product_id' => $this->postpaid_product->product_id,
+      'price' => '1000', // 10$
+      'start' => $plan_durations[0][0],
+      'end' => $plan_durations[0][1],
+    );
+    // The second plan hasn't been closed yet, so it's taking 3/4 of the cycle.
+    $expected_line_items[] = array(
+      'title' => 'postpaid base product (plan B)',
+      'product_id' => $this->another_postpaid_product->product_id,
+      'price' => '6000', // 60$
+      'start' => $plan_durations[1][0],
+      'end' => $this->billing_cycle->end,
+    );
+    $this->assertLineItems($recurring_order, $expected_line_items);
+
+    // Suspend and reactivate the postpaid license, ensure a new line item
+    // was added with the last 1/8 of the plan history priced.
+    $postpaid_license->status = COMMERCE_LICENSE_SUSPENDED;
+    $postpaid_license->save();
+    $postpaid_license->status = COMMERCE_LICENSE_ACTIVE;
+    $postpaid_license->save();
+
+    $revision_ids = db_query('SELECT * from {commerce_license_revision}
+                                WHERE license_id = :license_id AND status = :status
+                                  ORDER BY revision_id ASC', $data)->fetchAll(PDO::FETCH_ASSOC);
+    // Close the previous active revision.
+    db_update('commerce_license_revision')
+      ->fields(array(
+        'revision_created' => $plan_durations[1][0],
+        'revision_ended' => $plan_durations[1][1],
+      ))
+      ->condition('revision_id', $revision_ids[1]['revision_id'])
+      ->execute();
+    // Update the new active revision.
+    db_update('commerce_license_revision')
+      ->fields(array(
+        'revision_created' => $plan_durations[3][0],
+        'revision_ended' => 0,
+      ))
+      ->condition('revision_id', $revision_ids[2]['revision_id'])
+      ->execute();
+
+    // The previous active revision went from 3/4 to 1/4 of the billing cycle
+    // so the expected price needs to change.
+    $expected_line_items[2]['end'] = $plan_durations[1][1];
+    $expected_line_items[2]['price'] = '2000'; // 20$.
+    // Add the new active plan.
+    $expected_line_items[] = array(
+      'title' => 'postpaid base product (plan B)',
+      'product_id' => $this->another_postpaid_product->product_id,
+      'price' => '1000', // 10$
+      'start' => $plan_durations[3][0],
+      'end' => $this->billing_cycle->end,
+    );
+
+    // Reload the order and re-examine the line items.
+    entity_get_controller('commerce_order')->resetCache();
+    drupal_static_reset('commerce_license_billing_commerce_order_load');
+    drupal_static_reset('commerce_license_billing_plan_history_list');
+    $recurring_order = commerce_order_load($order_id);
+    $this->assertLineItems($recurring_order, $expected_line_items);
   }
 
   /**
