@@ -511,6 +511,26 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
     }
   }
 
+  // Charge for usage, if the license type supports it.
+  if ($license instanceof CommerceLicenseBillingUsageInterface) {
+    $usage_groups = $license->usageGroups();
+    $usage_history = commerce_license_billing_chargeable_usage_history_list($license, $billing_cycle);
+    foreach ($usage_history as $usage_record) {
+      $group_name = $usage_record['usage_group'];
+      $product = commerce_product_load_by_sku($usage_groups[$group_name]['product']);
+      $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+
+      $charges[] = array(
+        'commerce_product' => $product,
+        'quantity' => $usage_record['quantity'],
+        'commerce_unit_price' => $product_wrapper->commerce_price->value(),
+        'cl_billing_start' => $usage_record['start'],
+        'cl_billing_end' => $usage_record['end'],
+        'match' => array('commerce_product', 'cl_billing_start', 'cl_billing_end'),
+      );
+    }
+  }
+
   // Prorate the collected charges.
   commerce_license_billing_prorate_charges($charges, $billing_cycle);
 
@@ -745,15 +765,18 @@ function commerce_license_billing_change_plan($license, $product_id) {
  *   The license entity.
  * @param $billing_cycle
  *   The billing cycle entity.
+ * @param $active_only
+ *   Whether to filter out non-active records.
  *
  * @return
  *   An array of history records in the following format:
  *   - revision_id: The revision_id of the history record.
  *   - product_id: The id of the product representing the plan.
+ *   - status: The status of the entry.
  *   - start: The start timestamp.
  *   - end: The end timestamp.
  */
-function commerce_license_billing_plan_history_list($license, $billing_cycle) {
+function commerce_license_billing_plan_history_list($license, $billing_cycle, $active_only = TRUE) {
   $history = &drupal_static(__FUNCTION__, array());
   if (!isset($history[$license->license_id])) {
     // Fetch revisions that started or ended in this billing cycle, or are still
@@ -771,11 +794,10 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
     $query->addField('clr', 'revision_created', 'start');
     $query->addField('clr', 'revision_ended', 'end');
     $query->condition('license_id', $license->license_id);
-    $query->condition('status', COMMERCE_LICENSE_ACTIVE);
     $query->condition($or);
     $license_history = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
 
-    // Merge any records with the same product_id and status that are right
+    // Merge any entries with the same product_id and status that are right
     // next to each other (edge case when a revision wasn't created for a
     // product_id or status change, but for another purpose).
     $previous_index = NULL;
@@ -798,12 +820,12 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
     }
 
     // Adjust the start and end timestamps for the current billing cycle.
-    foreach ($license_history as &$history_record) {
+    foreach ($license_history as $index => $history_record) {
       if ($history_record['start'] < $billing_cycle->start) {
-        $history_record['start'] = $billing_cycle->start;
+        $license_history[$index]['start'] = $billing_cycle->start;
       }
       if (empty($history_record['end'])) {
-        $history_record['end'] = $billing_cycle->end;
+        $license_history[$index]['end'] = $billing_cycle->end;
       }
     }
 
@@ -811,7 +833,18 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
     $history[$license->license_id] = $license_history;
   }
 
-  return $history[$license->license_id];
+  // Filter out non-active records, if needed.
+  $license_history = $history[$license->license_id];
+  if ($active_only) {
+    foreach ($license_history as $index => $history_record) {
+      if ($history_record['status'] != COMMERCE_LICENSE_ACTIVE) {
+        unset($license_history[$index]);
+      }
+    }
+    $license_history = array_values($license_history);
+  }
+
+  return $license_history;
 }
 
 /**
@@ -963,6 +996,193 @@ function commerce_license_billing_usage_history_list($license, $billing_cycle) {
   }
 
   return $history[$license->license_id];
+}
+
+/**
+ * Returns the chargeable license usage history for an open billing cycle.
+ *
+ * Since counter usage is charged for in total, the counter usage records are
+ * collapsed into one record per usage group.
+ *
+ * Each usage group can define the free_quantity that the customer shouldn't be
+ * charged for. Only usage records exceeding free_quantity are returned for
+ * charging.
+ * All usage records are mapped to the license revisions active at the time
+ * of the usage, to ensure that the ignored free quantities are the one
+ * provided by the plan at the time of the usage.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $billing_cycle
+ *   The billing cycle entity.
+ *
+ * @return
+ *   An array of usage records.
+ */
+function commerce_license_billing_chargeable_usage_history_list($license, $billing_cycle) {
+  // Start from the full usage history.
+  $usage_history = commerce_license_billing_usage_history_list($license, $billing_cycle);
+  // Map usage history to plan history, so that each usage history record
+  // gets a revision_id we can use for getting free quantities.
+  $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle, FALSE);
+  $usage_history = commerce_license_billing_map_usage_to_plan_history($usage_history, $plan_history);
+  // Create an array of usage group names, used to weigh the charges.
+  $usage_groups = $license->usageGroups();
+  $usage_group_names = array_keys($usage_groups);
+  $usage_group_weights = array_flip($usage_group_names);
+
+  // Get the free quantities provided by each license revision.
+  // Start with the free usage given by the current revision.
+  $free_quantities = array();
+  foreach ($usage_groups as $group_name => $group_info) {
+    $free_quantities[$license->revision_id][$group_name] = $group_info['free_quantity'];
+  }
+  // Now get the free usage given by all other referenced revisions.
+  foreach ($usage_history as $usage_record) {
+    $revision_id = $usage_record['revision_id'];
+    if ($license->revision_id != $revision_id && !isset($free_quantities[$revision_id])) {
+      $revision = entity_revision_load('commerce_license', $revision_id);
+      $revision_usage_groups = $revision->usageGroups();
+      foreach ($revision_usage_groups as $group_name => $group_info) {
+        $free_quantities[$revision_id][$group_name] = $group_info['free_quantity'];
+      }
+    }
+  }
+
+  $counter_totals = array();
+  foreach ($usage_history as $index => $usage_record) {
+    $revision_id = $usage_record['revision_id'];
+    $group_name = $usage_record['usage_group'];
+    $usage_type = $usage_groups[$group_name]['type'];
+    $free_quantity = $free_quantities[$revision_id][$group_name];
+
+    if ($usage_type == 'counter') {
+      // Initialize the counter.
+      if (!isset($counter_totals[$group_name][$revision_id])) {
+        $counter_totals[$group_name][$revision_id] = 0;
+      }
+      // Increment the counter and remove the individual usage.
+      $counter_totals[$group_name][$revision_id] += $usage_record['quantity'];
+      unset($usage_history[$index]);
+    }
+    elseif ($usage_type == 'gauge' && $usage_record['quantity'] == $free_quantity) {
+      // Remove free gauge usage.
+      unset($usage_history[$index]);
+    }
+  }
+  // Calculate the non-free total for each counter.
+  foreach ($counter_totals as $group_name => $revision_quantities) {
+    $total = 0;
+    foreach ($revision_quantities as $revision_id => $quantity) {
+      $free_quantity = $free_quantities[$revision_id][$group_name];
+      if ($quantity > $free_quantity) {
+        $total += ($quantity - $free_quantity);
+      }
+    }
+
+    if ($total > 0) {
+      $usage_history[] = array(
+        'usage_group' => $group_name,
+        'quantity' => $total,
+        'start' => $billing_cycle->start,
+        'end' => $billing_cycle->end,
+      );
+    }
+  }
+
+  // Sort usage records by start ASC.
+  uasort($usage_history, 'commerce_license_billing_sort_usage');
+
+  return $usage_history;
+}
+
+/**
+ * Maps usage to plan history.
+ *
+ * Each usage record gets the revision_id of the matching plan record.
+ *
+ * @todo
+ * Remove this function and ensure that eaach usage add specifies the
+ * revision_id it is refering to.
+ *
+ * @param $usage_history
+ *   The usage history array.
+ * @param $plan_history
+ *   The plan history array.
+ *
+ * @return
+ *   The mapped usage history array, with the revision_id set on each record.
+ */
+function commerce_license_billing_map_usage_to_plan_history($usage_history, $plan_history) {
+  $mapped_usage = array();
+  // Keep going through usage history until all of the records have been
+  // mapped to a revision. The retry is needed to account for new records
+  // created when splitting old records that can't fit into a single revision.
+  while (!empty($usage_history)) {
+    foreach ($usage_history as $index => $usage_record) {
+      // First try to map usage that fits into the revision.
+      foreach ($plan_history as $history_record) {
+        $check_start = ($usage_record['start'] >= $history_record['start']);
+        $check_end = ($usage_record['end'] <= $history_record['end']);
+        if ($check_start && $check_end) {
+          $usage_record['revision_id'] = $history_record['revision_id'];
+          // Mark whether this usage record corresponds to an active revision.
+          // Non-active revisions are needed for successful mapping, but need
+          // to be removed prior to returning the data.
+          $usage_record['active'] = ($history_record['status'] == COMMERCE_LICENSE_ACTIVE);
+          $mapped_usage[] = $usage_record;
+          unset($usage_history[$index]);
+          continue 2;
+        }
+      }
+
+      // Then try to map usage whose start fits, but the end doesn't
+      // (requiring the usage record to be split into multiple parts).
+      foreach ($plan_history as $history_record) {
+        $usage_start = $usage_record['start'] ;
+        $usage_end = $usage_record['end'];
+        $history_start = $history_record['start'] ;
+        $history_end = $history_record['end'];
+
+        $check_start = ($usage_start >= $history_start && $usage_start < $history_end);
+        $check_end = ($usage_end > $history_end);
+        if ($check_start && $check_end) {
+          // Map the first part of the usage.
+          $first_usage_record = $usage_record;
+          $first_usage_record['revision_id'] = $history_record['revision_id'];
+          $first_usage_record['active'] = ($history_record['status'] == COMMERCE_LICENSE_ACTIVE);
+          $first_usage_record['end'] = $history_record['end'];
+          $mapped_usage[] = $first_usage_record;
+          // Add the rest of the usage to the pile for mapping.
+          $second_usage_record = $usage_record;
+          $second_usage_record['start'] = $history_record['end'] + 1;
+          $usage_history[] = $second_usage_record;
+          // Remove the original.
+          unset($usage_history[$index]);
+          continue 2;
+        }
+      }
+    }
+  }
+
+  // Remove usage belonging to non-active revisions.
+  foreach ($mapped_usage as $index => $usage_record) {
+    if (!$usage_record['active']) {
+      unset($mapped_usage[$index]);
+    }
+  }
+
+  return $mapped_usage;
+}
+
+/**
+ * Sorts an array of usage records by their start date, ascending.
+ */
+function commerce_license_billing_sort_usage($a, $b) {
+  if ($a['start'] == $b['start']) {
+    return 0;
+  }
+  return ($a['start'] < $b['start']) ? -1 : 1;
 }
 
 /**
