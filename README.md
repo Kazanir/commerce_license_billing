@@ -81,7 +81,7 @@ The timestamps are used to prorate the price of each plan that was active
 during the billing cycle.
 
 Only revisions with status `COMMERCE_LICENSE_ACTIVE` are priced, so if a license
-was inactive for a week, that period won't be priced since that revision will
+was suspended for a week, that period won't be priced since that revision will
 be ignored.
 
 Metered (usage-based) billing
@@ -109,6 +109,8 @@ there will be two prorated line items, charging for 2 and 4 environments.
 The gauge type also allows for open-ended usage (`immediate => TRUE`), in which
 case it is carried over into the next billing cycles.
 
+Note that the gauge usage is prorated, and the counter usage isn't.
+
 A usage group can also define `free_quantity`, the quantity provided for free
 with the license. Only usage exceeding this quantity will be charged for.
 For counters this means that the free quantity is subtracted from the total quantity.
@@ -134,6 +136,9 @@ The recurring order is refreshed each time it is loaded (`hook_commerce_order_lo
 updating the line items (quantities, prices) based on the latest plan history and usage.
 
 The start and end timestamps on the line items are maintained.
+For counter usage, they match the start and end of the billing cycle, since
+counter usage is not prorated. For gauge usage and plans, it reflects the exact
+period that is used for prorating.
 
 Billing cycle types
 -------------------
