@@ -229,9 +229,8 @@ function commerce_license_billing_create_recurring_orders($order) {
     // Open a billing cycle.
     $billing_cycle_type = $billing_cycle_types[$billing_cycle_type_id];
     $billing_cycle = $billing_cycle_type->getBillingCycle($order->uid);
-    // Sync the license timestamps with the billing cycle timestamps.
+    // Sync the license expiration and billing cycle end timestamps.
     foreach ($licenses as $license) {
-      $license->granted = $billing_cycle->start;
       $license->expires = $billing_cycle->end;
       $license->save();
     }
@@ -611,7 +610,7 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
   // Price the usage.
   $license = entity_create('commerce_license', array('type' => $license_type));
   $license->product_id = $product->product_id;
-  $license->granted = $billing_cycle->start;
+  $license->granted = REQUEST_TIME;
   $license->expires = $billing_cycle->end;
   if ($license instanceof CommerceLicenseBillingUsageInterface && !empty($usage)) {
     $usage_groups = $license->usageGroups();
