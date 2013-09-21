@@ -94,6 +94,9 @@ at the end of the billing cycle.
 Usage is reported asynchronously, and it is your job to call
 `commerce_license_billing_usage_add()` and register usage (after an API call
 received through Services, or after contacting the service yourself on cron, etc).
+If a license has usage groups, the billing cycle won't be closed until
+all usage has been reported (start - end pairs cover the entire billing cycle
+duration).
 
 There are two types of usage groups: counter and gauge.
 

@@ -93,6 +93,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       $this->planTest();
       $this->usageTest();
       $this->orderRefreshTest();
+      $this->billingCycleCloseTest();
     }
   }
 
@@ -136,6 +137,8 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     }
 
     // Confirm the line items on the recurring order.
+    // We are intentionally not loading the order so that the refresh is not
+    // triggered.
     $query = new EntityFieldQuery;
     $query
       ->entityCondition('entity_type', 'commerce_line_item')
@@ -156,7 +159,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       if (!empty($line_items_by_product[$this->prepaid_product->product_id])) {
         $line_item = $line_items_by_product[$this->prepaid_product->product_id];
         $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-        $this->assertTrue(TRUE, 'Found the recurring line item for the prepaid product.');
+        $this->assertTrue(TRUE, 'Found the recurring line item for the prepaid product');
 
         $next_billing_cycle = $this->billing_cycle_type->getNextBillingCycle($this->billing_cycle, FALSE);
         $start = $line_item_wrapper->cl_billing_start->value();
@@ -169,14 +172,14 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
         $this->assertEqual($price_amount, $expected_price_amount, 'The recurring line item for the prepaid product has the correct price');
       }
       else {
-        $this->assertTrue(FALSE, 'Found the recurring line item for the prepaid product.');
+        $this->assertTrue(FALSE, 'Found the recurring line item for the prepaid product');
       }
 
       // Try to find the line item for the postpaid product.
       if (!empty($line_items_by_product[$this->postpaid_product->product_id])) {
         $line_item = $line_items_by_product[$this->postpaid_product->product_id];
         $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-        $this->assertTrue(TRUE, 'Found the recurring line item for the postpaid product.');
+        $this->assertTrue(TRUE, 'Found the recurring line item for the postpaid product');
 
         $start = $line_item_wrapper->cl_billing_start->value();
         $end = $line_item_wrapper->cl_billing_end->value();
@@ -188,7 +191,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
         $this->assertEqual($price_amount, $expected_price_amount, 'The recurring line item for the postpaid product has the correct price');
       }
       else {
-        $this->assertTrue(FALSE, 'Found the recurring line item for the postpaid product.');
+        $this->assertTrue(FALSE, 'Found the recurring line item for the postpaid product');
       }
     }
     else {
@@ -321,15 +324,8 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       ->execute();
 
     // Trigger an order refresh.
-    $query = new EntityFieldQuery;
-    $query
-      ->entityCondition('entity_type', 'commerce_order')
-      ->entityCondition('bundle', 'recurring')
-      ->fieldCondition('cl_billing_cycle', 'target_id', $this->billing_cycle->billing_cycle_id);
-    $result = $query->execute();
-    $order_id = key($result['commerce_order']);
     drupal_static_reset('commerce_license_billing_plan_history_list');
-    $recurring_order = commerce_order_load($order_id);
+    $recurring_order = $this->getBillingCycleOrder($this->billing_cycle);
 
     // Build an array of expected line items.
     $next_billing_cycle = $this->billing_cycle_type->getNextBillingCycle($this->billing_cycle);
@@ -457,8 +453,79 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     entity_get_controller('commerce_order')->resetCache();
     drupal_static_reset('commerce_license_billing_commerce_order_load');
     drupal_static_reset('commerce_license_billing_plan_history_list');
-    $recurring_order = commerce_order_load($order_id);
+    $recurring_order = commerce_order_load($recurring_order->order_id);
     $this->assertLineItems($recurring_order, $expected_line_items);
+  }
+
+  /**
+   * Tests the closing of a billing cycle.
+   */
+  protected function billingCycleCloseTest() {
+    // Call the queue item manually.
+    $item = new stdClass;
+    $item->data = array();
+    $item->data['billing_cycle_id'] = $this->billing_cycle->billing_cycle_id;
+    commerce_license_billing_cycle_expiration_queue_process($item);
+
+    // The order hasn't been closed because of missing usage reports.
+    $recurring_order = $this->getBillingCycleOrder($this->billing_cycle);
+    $usage_pending = ($recurring_order->status == 'recurring_usage_pending');
+    $this->assertTrue($usage_pending, "The billing cycle hasn't been closed because of pending usage");
+
+    // Update usage so that the entire billing cycle is covered.
+    db_update('cl_billing_usage')
+      ->fields(array(
+        'start' => $this->billing_cycle->start,
+      ))
+      ->condition('quantity', array('2050', '1'))
+      ->execute();
+
+    // Retrigger the close, reload the order and re-examine it.
+    drupal_static_reset('commerce_license_billing_usage_history_list');
+    entity_get_controller('commerce_order')->resetCache();
+    commerce_license_billing_cycle_expiration_queue_process($item);
+
+    $recurring_order = commerce_order_load($recurring_order->order_id);
+    $payment_pending = ($recurring_order->status == 'recurring_payment_pending');
+    $this->assertTrue($payment_pending, 'The order is now awaiting payment, as expected.');
+
+    $this->billing_cycle = entity_load_single('cl_billing_cycle', $this->billing_cycle->billing_cycle_id);
+    $billing_cycle_closed = ($this->billing_cycle->status == 0);
+    $this->assertTrue($billing_cycle_closed, 'The previous billing cycle was successfully closed');
+    $expected_start = $this->billing_cycle->end + 1;
+    // Try to find the new billing cycle.
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'cl_billing_cycle')
+      ->propertyCondition('start', $expected_start);
+    $result = $query->execute();
+    $this->assertTrue($result, 'A new billing cycle was successfully opened');
+    if ($result) {
+      $billing_cycle_id = key($result['cl_billing_cycle']);
+      $new_billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
+      $new_recurring_order = $this->getBillingCycleOrder($new_billing_cycle);
+      $opened_new_order = FALSE;
+      if ($new_recurring_order && $new_recurring_order->status == 'recurring_open') {
+        $opened_new_order = TRUE;
+      }
+      $this->assertTrue($opened_new_order, 'A new recurring order was successfuly opened').
+
+      $licenses = commerce_license_billing_get_recurring_order_licenses($new_recurring_order);
+      $licenses_renewed = (count($licenses) == 2);
+      $usage_reset = TRUE;
+      foreach ($licenses as $license) {
+        if ($license->expires != $new_billing_cycle->end) {
+          $licenses_renewed = FALSE;
+        }
+        $env_usage = commerce_license_billing_current_usage($license, 'environments');
+        $bandwidth_usage = commerce_license_billing_current_usage($license, 'bandwidth');
+        if ($env_usage != 0 || $bandwidth_usage != 0) {
+          $usage_reset = FALSE;
+        }
+      }
+      $this->assertTrue($licenses_renewed, 'The licenses have been successfully renewed');
+      $this->assertTrue($usage_reset, 'Usage has been successfully reset.');
+    }
   }
 
   /**
@@ -488,6 +555,31 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $license_id = key($result['commerce_license']);
 
     return entity_load_single('commerce_license', $license_id);
+  }
+
+  /**
+   * Get the recurring order of a billing cycle.
+   *
+   * @param $billing_cycle
+   *   The billing cycle entity.
+   *
+   * @return
+   *   A loaded recurring order, or FALSE if not found.
+   */
+  protected function getBillingCycleOrder($billing_cycle) {
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'commerce_order')
+      ->entityCondition('bundle', 'recurring')
+      ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle->billing_cycle_id);
+    $result = $query->execute();
+    if ($result) {
+      $order_id = key($result['commerce_order']);
+      return commerce_order_load($order_id);
+    }
+    else {
+      return FALSE;
+    }
   }
 
   /**

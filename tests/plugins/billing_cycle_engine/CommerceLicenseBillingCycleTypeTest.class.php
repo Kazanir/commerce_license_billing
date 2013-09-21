@@ -37,7 +37,14 @@ class CommerceLicenseBillingCycleTypeTest extends CommerceLicenseBillingCycleTyp
     $query
       ->entityCondition('entity_type', 'cl_billing_cycle')
       ->entityCondition('bundle', $this->name)
+      ->propertyCondition('status', 1)
       ->propertyCondition('uid', $uid);
+    if ($start != REQUEST_TIME) {
+      // In case of a custom start, make sure to match the exact billing cycle.
+      // Ensures that new orders get the previous billing cycle created at the
+      // start of testing, while getNextBillingCycle returns the expected result.
+      $query->propertyCondition('start', $start);
+    }
     $result = $query->execute();
     if ($result) {
       $billing_cycle_id = key($result['cl_billing_cycle']);
