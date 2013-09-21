@@ -13,6 +13,7 @@ function commerce_license_billing_default_rules_configuration() {
   $items['commerce_license_billing_set_postpaid_product_price'] = entity_import('rules_config', '{ "commerce_license_billing_set_postpaid_product_price" : {
       "LABEL" : "Set the price of postpaid products to 0",
       "PLUGIN" : "reaction rule",
+      "TAGS" : [ "Commerce License Billing" ],
       "REQUIRES" : [ "rules", "commerce_license_billing", "commerce_product_reference" ],
       "ON" : [ "commerce_product_calculate_sell_price" ],
       "IF" : [
@@ -40,6 +41,7 @@ function commerce_license_billing_default_rules_configuration() {
       "LABEL" : "Create recurring orders based on the initial order",
       "PLUGIN" : "reaction rule",
       "WEIGHT" : "10",
+      "TAGS" : [ "Commerce License Billing" ],
       "REQUIRES" : [ "commerce_license_billing", "commerce_payment" ],
       "ON" : [ "commerce_payment_order_paid_in_full" ],
       "IF" : [
