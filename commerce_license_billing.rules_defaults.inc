@@ -52,6 +52,49 @@ function commerce_license_billing_default_rules_configuration() {
       ]
     }
   }');
+  $items['rules_commerce_license_billing_charge_recurring_order'] = entity_import('rules_config', '{ "rules_commerce_license_billing_charge_recurring_order" : {
+      "LABEL" : "Charge a recurring order",
+      "PLUGIN" : "reaction rule",
+      "TAGS" : [ "Commerce License Billing" ],
+      "REQUIRES" : [ "rules", "commerce_payment", "commerce_cardonfile", "entity" ],
+      "ON" : [ "commerce_order_update" ],
+      "IF" : [
+        { "NOT data_is" : {
+            "data" : [ "commerce-order:status" ],
+            "value" : [ "commerce-order-unchanged:status" ]
+          }
+        },
+        { "data_is" : {
+            "data" : [ "commerce-order:status" ],
+            "value" : "recurring_payment_pending"
+          }
+        },
+        { "commerce_payment_order_balance_comparison" : {
+            "commerce_order" : [ "commerce_order" ],
+            "operator" : "\u003E",
+            "value" : "0"
+          }
+        }
+      ],
+      "DO" : [
+        { "commerce_cardonfile_order_select_card" : {
+            "USING" : { "order" : [ "commerce-order" ] },
+            "PROVIDE" : { "select_card_response" : { "select_card_response" : "Select card response" } }
+          }
+        },
+        { "commerce_cardonfile_order_charge_card" : {
+            "USING" : {
+              "order" : [ "commerce-order" ],
+              "charge" : [ "" ],
+              "select_card_response" : [ "select_card_response" ],
+              "card_data" : [ "" ]
+            },
+            "PROVIDE" : { "charge_card_response" : { "charge_card_response" : "charge Card Response" } }
+          }
+        }
+      ]
+    }
+  }');
 
   return $items;
 }
