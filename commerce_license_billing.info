@@ -12,5 +12,9 @@ dependencies[] = list
 
 ; Classes includes
 files[] = plugins/billing_cycle_engine/base.inc
+files[] = includes/commerce_license_billing.interface.inc
 files[] = includes/commerce_license_billing.cycle_type_ui.inc
 files[] = includes/commerce_license_billing.cycle.inc
+
+; Tests
+files[] = tests/commerce_license_billing.test
