@@ -476,6 +476,12 @@ function commerce_license_billing_generate_base_line_item($license, $billing_cyc
   $line_item_wrapper->cl_billing_license = $license;
 
   $line_item_wrapper->commerce_unit_price = $license->wrapper->product->commerce_price->value();
+  $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add(
+    $line_item_wrapper->commerce_unit_price->value(),
+    'base_price',
+    $line_item_wrapper->commerce_unit_price->value(),
+    TRUE
+  );
   if ($product_wrapper->cl_billing_type->value() == 'prepaid') {
     // In case of prepaid, the line item always charges for the next
     // billing cycle. So if the just opened billing cycle is "February",
@@ -578,6 +584,12 @@ function commerce_license_billing_order_refresh($order) {
       }
 
       $line_item_wrapper->commerce_unit_price = $charge['commerce_unit_price'];
+      $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add(
+        $line_item_wrapper->commerce_unit_price->value(),
+          'base_price',
+          $line_item_wrapper->commerce_unit_price->value(),
+          TRUE
+      );
       $line_item_wrapper->cl_billing_start = $charge['cl_billing_start'];
       $line_item_wrapper->cl_billing_end = $charge['cl_billing_end'];
       // Trigger price calculation to get any needed discounts or price changes.
