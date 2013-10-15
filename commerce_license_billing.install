@@ -116,6 +116,12 @@ function commerce_license_billing_schema() {
         'not null' => TRUE,
         'default' => 0,
       ),
+      'revision_id' => array(
+        'description' => 'The revision id of the license.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
       'usage_group' => array(
         'description' => 'The usage group, as defined in $license->usageGroups().',
         'type' => 'varchar',

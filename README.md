@@ -92,11 +92,12 @@ registered and calculated for each usage group separately, and charge for it
 at the end of the billing cycle.
 
 Usage is reported asynchronously, and it is your job to call
-`commerce_license_billing_usage_add()` and register usage (after an API call
-received through Services, or after contacting the service yourself on cron, etc).
+`commerce_license_billing_usage_group($license, $group_name)->addUsage()`
+and register usage (after an API call received through Services, or after
+contacting the service yourself on cron, etc).
 If a license has usage groups, the billing cycle won't be closed until
-all usage has been reported (start - end pairs cover the entire billing cycle
-duration).
+all usage has been reported for each plan (start - end pairs cover each plan
+duration in the billing cycle).
 
 There are two types of usage groups: counter and gauge.
 
@@ -128,10 +129,12 @@ at the time.
 See:
 
 - `CommerceLicenseBillingUsageInterface`
-- `commerce_license_billing_usage_add()`
-- `commerce_license_billing_usage_clear()`
-- `commerce_license_billing_current_usage()`
+- `CommerceLicenseBillingUsageGroupInterface`
+- `CommerceLicenseBillingCounterUsageGroup`
+- `CommerceLicenseBillingGaugeUsageGroup`
+- `commerce_license_billing_usage_group()`
 - `commerce_license_billing_usage_history_list()`
+- `commerce_license_billing_usage_clear()`
 
 Recurring order refresh
 -----------------------

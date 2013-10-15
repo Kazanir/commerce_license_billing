@@ -33,10 +33,8 @@ interface CommerceLicenseBillingUsageInterface {
    *   values that equal free_quantity are ignored.
    * Optional keys for the 'gauge' type.
    * - immediate: Whether usage changes are guaranteed to be reported right
-   *   away. If FALSE, the billing cycle won't be closed until the complete
-   *   usage for the previous period has been reported.
-   *   If TRUE, the usage is open-ended and will be carried over into next
-   *   billing cycles. The 'counter' type always assumes immediate to be FALSE.
+   *   away. If TRUE, the usage is open-ended and will be carried over into next
+   *   billing cycles.
    *
    * <code>
    * return array(
