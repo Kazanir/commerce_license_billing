@@ -978,28 +978,6 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle, $a
     $query->condition($or);
     $license_history = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
 
-    // Merge any entries with the same product_id and status that are right
-    // next to each other (edge case when a revision wasn't created for a
-    // product_id or status change, but for another purpose).
-    $previous_index = NULL;
-    foreach ($license_history as $index => $history_record) {
-      if (!isset($previous_index)) {
-        $previous_index = $index;
-        continue;
-      }
-
-      $previous_record = $license_history[$previous_index];
-      $products_match = ($history_record['product_id'] == $previous_record['product_id']);
-      $statuses_match = ($history_record['status'] == $previous_record['status']);
-      $times_match = ($history_record['start'] - $previous_record['end'] === 1);
-      if ($products_match && $statuses_match && $times_match) {
-        $license_history[$previous_index]['end'] = $history_record['end'];
-        unset($license_history[$index]);
-        continue;
-      }
-      $previous_index = $index;
-    }
-
     // Adjust the start and end timestamps for the current billing cycle.
     foreach ($license_history as $index => $history_record) {
       if ($history_record['start'] < $billing_cycle->start) {
