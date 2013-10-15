@@ -726,6 +726,8 @@ function commerce_license_billing_prorate_charges(&$charges, $billing_cycle) {
  *
  * @param $license_type
  *   The license type.
+ * @param $uid
+ *   The uid of the license owner.
  * @param $product
  *   The product representing the license plan.
  * @param $usage
@@ -737,7 +739,7 @@ function commerce_license_billing_prorate_charges(&$charges, $billing_cycle) {
  *   - charges: An array of arrays with product, unit_price, quantity keys.
  *   - total: The total price array (amount, currency_code, data).
  */
-function commerce_license_billing_estimate_cost($license_type, $product, $usage = NULL) {
+function commerce_license_billing_estimate_cost($license_type, $uid, $product, $usage = NULL) {
   // Prepare commonly needed data.
   $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
   $zero_price = array(
@@ -749,6 +751,25 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
   // Construct a billing cycle.
   $billing_cycle_type = $product_wrapper->cl_billing_cycle_type->value();
   $billing_cycle = $billing_cycle_type->getBillingCycle($GLOBALS['user']->uid, REQUEST_TIME, FALSE);
+  // Try to determine the order_id to be set on the line item, used during
+  // price calculation. Start by searching for an active recurring order.
+  // If not found, see if the user has an active cart, and use its order_id.
+  $order_id = 0;
+  $query = new EntityFieldQuery;
+  $query
+    ->entityCondition('entity_type', 'commerce_order')
+    ->entityCondition('bundle', 'recurring')
+    ->propertyCondition('uid', $uid)
+    ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle->billing_cycle_id);
+  $result = $query->execute();
+  if ($result) {
+    $order_id = key($result['commerce_order']);
+  }
+  else {
+    if ($cart_order = commerce_cart_order_load($uid)) {
+      $order_id = $cart_order->order_id;
+    }
+  }
 
   $estimation = array(
     'billing_cycle' => array(
@@ -758,7 +779,7 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
     ),
   );
   // Price the base product.
-  $price = commerce_license_billing_calculate_sell_price($product, 1, $billing_cycle);
+  $price = commerce_license_billing_calculate_sell_price($order_id, $product, 1, $billing_cycle);
   $estimation['charges'][] = array(
     'product' => $product,
     'quantity' => 1,
@@ -780,7 +801,7 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
       }
       else {
         $quantity -= $usage_group['free_quantity'];
-        $unit_price = commerce_license_billing_calculate_sell_price($usage_product, $quantity, $billing_cycle);
+        $unit_price = commerce_license_billing_calculate_sell_price($order_id, $usage_product, $quantity, $billing_cycle);
         $total_price = $unit_price;
         // Multiply the amount and all price components by quantity.
         $total_price['amount'] *= $quantity;
@@ -814,6 +835,8 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
 /**
  * Returns the calculated sell price for the given product.
  *
+ * @param $order_id
+ *   The order_id to set on the line item, used for context by pricing rules.
  * @param $product
  *   The product whose sell price will be calculated.
  * @param $quantity
@@ -824,8 +847,8 @@ function commerce_license_billing_estimate_cost($license_type, $product, $usage 
  * @return
  *   A price field data array as returned by entity_metadata_wrapper().
  */
-function commerce_license_billing_calculate_sell_price($product, $quantity, $billing_cycle) {
-  $line_item = commerce_line_item_new('recurring');
+function commerce_license_billing_calculate_sell_price($order_id, $product, $quantity, $billing_cycle) {
+  $line_item = commerce_line_item_new('recurring', $order_id);
   $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
   $line_item_wrapper->cl_billing_start = $billing_cycle->start;
   $line_item_wrapper->cl_billing_end = $billing_cycle->end;
