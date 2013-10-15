@@ -378,6 +378,7 @@ function commerce_license_billing_create_recurring_orders($order) {
     // Sync the license expiration and billing cycle end timestamps.
     foreach ($licenses as $license) {
       $license->expires = $billing_cycle->end;
+      $license->expires_automatically = FALSE;
       $license->save();
     }
 
