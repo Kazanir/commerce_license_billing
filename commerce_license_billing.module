@@ -911,7 +911,7 @@ function commerce_license_billing_get_license_billing_cycle($license) {
  * Ensures that a new license revision is created on product or status changes.
  */
 function commerce_license_billing_commerce_license_presave($license) {
-  if (empty($license->original) || $license->original->status < COMMERCE_LICENSE_ACTIVE) {
+  if (empty($license->original) || $license->status < COMMERCE_LICENSE_ACTIVE) {
     // The license is new, or hasn't been activated yet.
     return;
   }

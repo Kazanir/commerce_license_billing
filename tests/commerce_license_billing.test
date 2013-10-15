@@ -393,6 +393,8 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $postpaid_license->status = COMMERCE_LICENSE_ACTIVE;
     $postpaid_license->save();
 
+    // At this moment the revisions are: created (initial), active (Plan A),
+    // active (Plan B), suspended, active (Plan B).
     $data = array(
       'license_id' => $postpaid_license->license_id,
     );
@@ -405,7 +407,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
         'revision_created' => $plan_durations[1][0],
         'revision_ended' => $plan_durations[1][1],
       ))
-      ->condition('revision_id', $revision_ids[1]['revision_id'])
+      ->condition('revision_id', $revision_ids[2]['revision_id'])
       ->execute();
     // Update the suspended revision.
     db_update('commerce_license_revision')
@@ -413,7 +415,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
         'revision_created' => $plan_durations[2][0],
         'revision_ended' => $plan_durations[2][1],
       ))
-      ->condition('revision_id', $revision_ids[2]['revision_id'])
+      ->condition('revision_id', $revision_ids[3]['revision_id'])
       ->execute();
     // Update the new active revision.
     db_update('commerce_license_revision')
@@ -421,7 +423,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
         'revision_created' => $plan_durations[3][0],
         'revision_ended' => 0,
       ))
-      ->condition('revision_id', $revision_ids[3]['revision_id'])
+      ->condition('revision_id', $revision_ids[4]['revision_id'])
       ->execute();
 
     // The previous active revision went from 3/4 to 1/4 of the billing cycle
