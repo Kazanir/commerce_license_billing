@@ -309,6 +309,10 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
       $order->status = 'recurring_usage_pending';
       commerce_order_save($order);
     }
+    else {
+      // Release the lock.
+      entity_get_controller('commerce_order')->resetCache();
+    }
 
     return array(
       'status' => ADVANCEDQUEUE_STATUS_FAILURE,
