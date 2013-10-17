@@ -37,7 +37,7 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
     );
     $usage = db_query("SELECT quantity FROM {cl_billing_usage}
                     WHERE license_id = :license_id AND usage_group = :group
-                      ORDER BY start DESC LIMIT 1", $data)->fetchColumn();
+                      ORDER BY start DESC, usage_id DESC LIMIT 1", $data)->fetchColumn();
 
     return $usage;
   }
