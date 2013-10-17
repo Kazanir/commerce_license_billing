@@ -93,5 +93,20 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
         }
       }
     }
+    // A new revision has been created, unsuspending the license. Reopen
+    // previous usage.
+    elseif ($previous_status == COMMERCE_LICENSE_SUSPENDED && $new_status == COMMERCE_LICENSE_ACTIVE) {
+      // Get the last closed usage quantity for this group.
+      $data = array(
+        ':group_name' => $this->groupName,
+        ':license_id' => $this->license->license_id,
+      );
+      $query = db_query('SELECT quantity FROM {cl_billing_usage}
+                            WHERE usage_group = :group_name
+                              AND license_id = :license_id
+                                ORDER BY end DESC, usage_id DESC LIMIT 1', $data);
+      $previous_quantity = $query->fetchField();
+      $this->addUsage($this->license->revision_id, $previous_quantity, $current_time);
+    }
   }
 }
