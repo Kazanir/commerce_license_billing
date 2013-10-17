@@ -18,6 +18,7 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
           'day' => 'Day',
           'week' => 'Week',
           'month' => 'Month',
+          'year' => 'Year',
         ),
       ),
     );
@@ -92,6 +93,9 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
         case 'month':
           $start = strtotime(date('F Y', $start));
           break;
+        case 'year':
+          $start = mktime(0, 0, 0, 1, 1, date('Y', $start) + 1);
+          break;
       }
     }
     // Calculate the end timestamp.
@@ -99,6 +103,7 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
       'day' => '+1 day',
       'week' => '+1 week',
       'month' => '+1 month',
+      'year' => '+1 year',
     );
     // The 1 is substracted to make sure that the billing cycle ends 1s before
     // the next one starts (January 31st 23:59:59, for instance, with the
