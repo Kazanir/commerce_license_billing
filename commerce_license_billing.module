@@ -924,11 +924,11 @@ function commerce_license_billing_commerce_license_presave($license) {
 }
 
 /**
- * Implements hook_commerce_license_save().
+ * Implements hook_commerce_license_update().
  *
  * Notifies usage groups of revision changes.
  */
-function commerce_license_billing_commerce_license_save($license) {
+function commerce_license_billing_commerce_license_update($license) {
   if ($license->is_new_revision && $license instanceof CommerceLicenseBillingUsageInterface) {
     foreach (array_keys($license->usageGroups()) as $group_name) {
       $usage_group = commerce_license_billing_usage_group($license, $group_name);
@@ -1041,7 +1041,8 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
  */
 function commerce_license_billing_usage_history_list($license, $billing_cycle) {
   $history = &drupal_static(__FUNCTION__, array());
-  if (empty($history[$license->license_id])) {
+  if (!isset($history[$license->license_id])) {
+    $history[$license->license_id] = array();
     $data = array(
       ':license_id' => $license->license_id,
     );
