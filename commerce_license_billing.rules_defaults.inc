@@ -52,49 +52,53 @@ function commerce_license_billing_default_rules_configuration() {
       ]
     }
   }');
-  $items['rules_commerce_license_billing_charge_recurring_order'] = entity_import('rules_config', '{ "rules_commerce_license_billing_charge_recurring_order" : {
-      "LABEL" : "Charge a recurring order",
-      "PLUGIN" : "reaction rule",
-      "TAGS" : [ "Commerce License Billing" ],
-      "REQUIRES" : [ "rules", "commerce_payment", "commerce_cardonfile", "entity" ],
-      "ON" : [ "commerce_order_update" ],
-      "IF" : [
-        { "NOT data_is" : {
-            "data" : [ "commerce-order:status" ],
-            "value" : [ "commerce-order-unchanged:status" ]
+  // For some reason, a crash occurs if the cardonfile module is missing when
+  // adding a default rule with it as the dependency.
+  if (module_exists('commerce_cardonfile')) {
+    $items['rules_commerce_license_billing_charge_recurring_order'] = entity_import('rules_config', '{ "rules_commerce_license_billing_charge_recurring_order" : {
+        "LABEL" : "Charge a recurring order",
+        "PLUGIN" : "reaction rule",
+        "TAGS" : [ "Commerce License Billing" ],
+        "REQUIRES" : [ "rules", "commerce_payment", "commerce_cardonfile", "entity" ],
+        "ON" : [ "commerce_order_update" ],
+        "IF" : [
+          { "NOT data_is" : {
+              "data" : [ "commerce-order:status" ],
+              "value" : [ "commerce-order-unchanged:status" ]
+            }
+          },
+          { "data_is" : {
+              "data" : [ "commerce-order:status" ],
+              "value" : "recurring_payment_pending"
+            }
+          },
+          { "commerce_payment_order_balance_comparison" : {
+              "commerce_order" : [ "commerce_order" ],
+              "operator" : "\u003E",
+              "value" : "0"
+            }
           }
-        },
-        { "data_is" : {
-            "data" : [ "commerce-order:status" ],
-            "value" : "recurring_payment_pending"
+        ],
+        "DO" : [
+          { "commerce_cardonfile_order_select_card" : {
+              "USING" : { "order" : [ "commerce-order" ] },
+              "PROVIDE" : { "select_card_response" : { "select_card_response" : "Select card response" } }
+            }
+          },
+          { "commerce_cardonfile_order_charge_card" : {
+              "USING" : {
+                "order" : [ "commerce-order" ],
+                "charge" : [ "" ],
+                "select_card_response" : [ "select_card_response" ],
+                "card_data" : [ "" ]
+              },
+              "PROVIDE" : { "charge_card_response" : { "charge_card_response" : "charge Card Response" } }
+            }
           }
-        },
-        { "commerce_payment_order_balance_comparison" : {
-            "commerce_order" : [ "commerce_order" ],
-            "operator" : "\u003E",
-            "value" : "0"
-          }
-        }
-      ],
-      "DO" : [
-        { "commerce_cardonfile_order_select_card" : {
-            "USING" : { "order" : [ "commerce-order" ] },
-            "PROVIDE" : { "select_card_response" : { "select_card_response" : "Select card response" } }
-          }
-        },
-        { "commerce_cardonfile_order_charge_card" : {
-            "USING" : {
-              "order" : [ "commerce-order" ],
-              "charge" : [ "" ],
-              "select_card_response" : [ "select_card_response" ],
-              "card_data" : [ "" ]
-            },
-            "PROVIDE" : { "charge_card_response" : { "charge_card_response" : "charge Card Response" } }
-          }
-        }
-      ]
-    }
-  }');
+        ]
+      }
+    }');
+  }
 
   return $items;
 }
