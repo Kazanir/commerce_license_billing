@@ -35,6 +35,9 @@ interface CommerceLicenseBillingUsageInterface {
    * - immediate: Whether usage changes are guaranteed to be reported right
    *   away. If TRUE, the usage is open-ended and will be carried over into next
    *   billing cycles.
+   * - initial_quantity: The initial quantity to register when opening the
+   *   billing cycle. For example, if the user starts with 1 development
+   *   environment, "initial_quantity" should be set to 1.
    *
    * <code>
    * return array(
