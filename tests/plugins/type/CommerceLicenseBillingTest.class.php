@@ -22,7 +22,7 @@ class CommerceLicenseBillingTest extends CommerceLicenseBase implements Commerce
         'type' => 'gauge',
         'product' => 'BILLING-TEST-ENV',
         'immediate' => TRUE,
-        'free_quantity' => 1,
+        'free_quantity' => 3,
       ),
     );
   }

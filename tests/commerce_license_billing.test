@@ -19,6 +19,8 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   protected $postpaid_product = NULL;
   protected $alternative_postpaid_product = NULL;
   protected $postpaid_product_display = NULL;
+  protected $prepaid_license = NULL;
+  protected $postpaid_license = NULL;
 
   public static function getInfo() {
     return array(
@@ -90,6 +92,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   public function testRecurring() {
     $checkout_success = $this->checkoutTest();
     if ($checkout_success !== FALSE) {
+      $this->prepareData();
       $this->planTest();
       $this->usageTest();
       $this->orderRefreshTest();
@@ -205,12 +208,12 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
    * Tests plan changes.
    */
   public function planTest() {
-    $license = $this->getLicense('postpaid');
-
+    // Forward time to the expected start of plan B.
+    commerce_license_set_time($this->plan_durations[1][0]);
     // Switch from plan A to plan B.
     $plan_b_product_id = $this->another_postpaid_product->product_id;
-    commerce_license_billing_change_plan($license, $plan_b_product_id);
-    $plan_history = commerce_license_billing_plan_history_list($license, $this->billing_cycle);
+    commerce_license_billing_change_plan($this->postpaid_license, $plan_b_product_id);
+    $plan_history = commerce_license_billing_plan_history_list($this->postpaid_license, $this->billing_cycle);
     if (count($plan_history) < 2) {
       // The second record wasn't created, something went wrong, stop here.
       $this->assertTrue(FALSE, 'The second plan history record was successfuly opened');
@@ -219,7 +222,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
 
     $second_record_valid = FALSE;
     $product_ids_match = ($plan_history[1]['product_id'] == $plan_b_product_id);
-    $start_times_match = ($plan_history[1]['start'] == REQUEST_TIME);
+    $start_times_match = ($plan_history[1]['start'] == $this->plan_durations[1][0]);
     $end_times_match = ($plan_history[1]['end'] == $this->billing_cycle->end);
     if ($product_ids_match && $start_times_match && $end_times_match) {
       $second_record_valid = TRUE;
@@ -233,105 +236,46 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
    * Tests usage tracking.
    */
   protected function usageTest() {
-    $prepaid_license = $this->getLicense('prepaid');
-    $postpaid_license = $this->getLicense('postpaid');
-    // Calculate the start and end timestamps of the usage.
-    // The gauge usage matches the first and second plan change.
-    $plan_history = commerce_license_billing_plan_history_list($postpaid_license, $this->billing_cycle);
-    $billing_cycle_duration = $this->billing_cycle->end - $this->billing_cycle->start;
-    $duration_part = ($billing_cycle_duration + 1) / 8;
-    $first_usage_start = $this->billing_cycle->start;
-    $second_usage_start =  $first_usage_start + ($duration_part * 2);
-    $first_usage_end = $second_usage_start - 1;
-    $second_usage_end = $this->billing_cycle->end;
-
-    // Add counter usage. The prepaid license didn't have a plan change, so both
-    // records get added to the current revision.
-    $bandwidth = commerce_license_billing_usage_group($prepaid_license, 'bandwidth');
-    $bandwidth->addUsage($prepaid_license->revision_id, 2050, $first_usage_start, $first_usage_end);
-    $bandwidth->addUsage($prepaid_license->revision_id, 1022, $second_usage_start, $second_usage_end);
+    $plan_history = commerce_license_billing_plan_history_list($this->postpaid_license, $this->billing_cycle);
+    // Use the start / end timestamps for the first and second postpaid plan as
+    // the usage start / end timestamps. Since the prepaid license had no plan
+    // change, both usage records will fit into its first and only plan.
+    $first_usage_start = $plan_history[0]['start'];
+    $first_usage_end = $plan_history[0]['end'];
+    $second_usage_start = $plan_history[1]['start'];
+    $second_usage_end = $plan_history[1]['end'];
+    $bandwidth = commerce_license_billing_usage_group($this->prepaid_license, 'bandwidth');
+    $bandwidth->addUsage($this->prepaid_license->revision_id, 2050, $first_usage_start, $first_usage_end);
+    $bandwidth->addUsage($this->prepaid_license->revision_id, 1022, $second_usage_start, $second_usage_end);
     // Confirm the correct current usage.
     $current_usage = $bandwidth->currentUsage();
     $this->assertEqual($current_usage, 3072, 'Current bandwidth usage matches total reported quantity');
 
-    // Open usage for environments.
-    $environments = commerce_license_billing_usage_group($postpaid_license, 'environments');
-    $environments->addUsage($plan_history[0]['revision_id'], 1, $first_usage_start, $first_usage_end);
-    $environments->addUsage($plan_history[1]['revision_id'], 3, $second_usage_start);
+    // Forward time to expected start of plan B.
+    commerce_license_set_time($this->plan_durations[1][0]);
+
+    // Confirm that the environments gauge has the correct initial value.
+    $environments = commerce_license_billing_usage_group($this->postpaid_license, 'environments');
+    $initial_usage = (int) $environments->currentUsage();
+    $this->assertTrue($initial_usage === 2, 'The initial environment usage was successfuly opened.');
+    // Register new usage for the second plan.
+    $environments->addUsage($plan_history[1]['revision_id'], 4, $second_usage_start);
     // Confirm that the first usage was correctly closed.
-    $usage_history = commerce_license_billing_usage_history_list($postpaid_license, $this->billing_cycle);
+    $usage_history = commerce_license_billing_usage_history_list($this->postpaid_license, $this->billing_cycle);
     $usage_history = $usage_history['environments'];
-    $first_record_closed = ($usage_history[0]['end'] + 1 == $usage_history[1]['start']);
+    $first_record_closed = ($usage_history[1]['end'] + 1 == $usage_history[2]['start']);
     $this->assertTrue($first_record_closed, 'The first environment usage history record was successfuly closed');
     // Confirm the correct current usage.
     $current_usage = $environments->currentUsage();
-    $this->assertEqual($current_usage, 3, 'Current environment usage matches last reported quantity');
-
-    // For future test purposes, add environment usage for the prepaid license,
-    // and bandwidth usage or the postpaid license.
-    $environments = commerce_license_billing_usage_group($prepaid_license, 'environments');
-    $environments->addUsage($prepaid_license->revision_id, 1, $first_usage_start);
-    $bandwidth = commerce_license_billing_usage_group($postpaid_license, 'bandwidth');
-    $bandwidth->addUsage($plan_history[0]['revision_id'], 2050, $first_usage_start, $first_usage_end);
-    $bandwidth->addUsage($plan_history[1]['revision_id'], 1022, $second_usage_start, $second_usage_end);
+    $this->assertEqual($current_usage, 4, 'Current environment usage matches last reported quantity');
   }
 
   /**
    * Tests the recurring order refresh and its pricing logic.
    */
   protected function orderRefreshTest() {
-    $prepaid_license = $this->getLicense('prepaid');
-    $postpaid_license = $this->getLicense('postpaid');
-
-    // Tweak the revisions so that the plan changes can be prorated.
-    // First plan: 1/4 of the billing cycle, second plan 2/4, suspend 1/8,
-    // reactive second plan 1/8.
-    // Normally the first plan would start on $postpaid_license->granted,
-    // which is after $this->billing_cycle->start, but in this case we need
-    // to have the durations tweaked so that we can predict the pricing.
-    $billing_cycle_duration = $this->billing_cycle->end - $this->billing_cycle->start;
-    $duration_part = ($billing_cycle_duration + 1) / 8;
-    $first_plan_start = $this->billing_cycle->start;
-    $second_plan_start = $first_plan_start + ($duration_part * 2);
-    $suspension_start = $first_plan_start + ($duration_part * 4);
-    $reactivation_start = $first_plan_start + ($duration_part * 7);
-    $plan_durations = array();
-    $plan_durations[] = array($first_plan_start, $second_plan_start - 1);
-    $plan_durations[] = array($second_plan_start, $suspension_start - 1);
-    $plan_durations[] = array($suspension_start, $reactivation_start - 1);
-    $plan_durations[] = array($reactivation_start, 0);
-    // Store the plan durations for further test usage.
-    $this->plan_durations = $plan_durations;
-
-    // The postpaid license has already had a plan shift from A to B, so
-    // there are two revisions that should be updated.
-    $data = array(
-      'license_id' => $postpaid_license->license_id,
-      'status' => COMMERCE_LICENSE_ACTIVE,
-    );
-    $revision_ids = db_query('SELECT revision_id from {commerce_license_revision}
-                                WHERE license_id = :license_id AND status = :status
-                                  ORDER BY revision_id ASC', $data)->fetchAll(PDO::FETCH_ASSOC);
-    db_update('commerce_license_revision')
-      ->fields(array(
-        'revision_created' => $plan_durations[0][0],
-        'revision_ended' => $plan_durations[0][1],
-      ))
-      ->condition('revision_id', $revision_ids[0]['revision_id'])
-      ->execute();
-    db_update('commerce_license_revision')
-      ->fields(array(
-        'revision_created' => $plan_durations[1][0],
-        // Since the second revision is still active, its end should be 0.
-        'revision_ended' => 0,
-      ))
-      ->condition('revision_id', $revision_ids[1]['revision_id'])
-      ->execute();
-
-    // Trigger an order refresh.
-    drupal_static_reset('commerce_license_billing_plan_history_list');
+    $plan_durations = $this->plan_durations;
     $recurring_order = $this->getBillingCycleOrder($this->billing_cycle);
-
     // Build an array of expected line items.
     $next_billing_cycle = $this->billing_cycle_type->getNextBillingCycle($this->billing_cycle);
     $expected_line_items = array();
@@ -377,59 +321,30 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     // 7.50$ is the expected unit price because at this moment the environment
     // usage is valid for 3/4 of the cycle, so it's 10$ * (3/4).
     $expected_line_items[] = array(
-      'title' => 'environments usage product',
+      'title' => 'environments usage product for plan B',
       'product_id' => $env_product->product_id,
-      'unit_price' => '750',
-      'quantity' => 3,
+      'unit_price' => '750', // 7.50$
+      'quantity' => 4,
       'start' => $plan_durations[1][0],
       'end' => $this->billing_cycle->end,
     );
     $this->assertLineItems($recurring_order, $expected_line_items);
 
-    // Suspend and reactivate the postpaid license, ensure a new line item
-    // was added with the last 1/8 of the plan history priced.
-    $postpaid_license->status = COMMERCE_LICENSE_SUSPENDED;
-    $postpaid_license->save();
-    $postpaid_license->status = COMMERCE_LICENSE_ACTIVE;
-    $postpaid_license->save();
+    // Forward time to the expected suspension start, and then do it.
+    commerce_license_set_time($this->plan_durations[2][0]);
+    $this->postpaid_license->status = COMMERCE_LICENSE_SUSPENDED;
+    $this->postpaid_license->save();
 
-    // At this moment the revisions are: created (initial), active (Plan A),
-    // active (Plan B), suspended, active (Plan B).
-    $data = array(
-      'license_id' => $postpaid_license->license_id,
-    );
-    $revision_ids = db_query('SELECT * from {commerce_license_revision}
-                                WHERE license_id = :license_id
-                                  ORDER BY revision_id ASC', $data)->fetchAll(PDO::FETCH_ASSOC);
-    // Close the previous active revision.
-    db_update('commerce_license_revision')
-      ->fields(array(
-        'revision_created' => $plan_durations[1][0],
-        'revision_ended' => $plan_durations[1][1],
-      ))
-      ->condition('revision_id', $revision_ids[2]['revision_id'])
-      ->execute();
-    // Update the suspended revision.
-    db_update('commerce_license_revision')
-      ->fields(array(
-        'revision_created' => $plan_durations[2][0],
-        'revision_ended' => $plan_durations[2][1],
-      ))
-      ->condition('revision_id', $revision_ids[3]['revision_id'])
-      ->execute();
-    // Update the new active revision.
-    db_update('commerce_license_revision')
-      ->fields(array(
-        'revision_created' => $plan_durations[3][0],
-        'revision_ended' => 0,
-      ))
-      ->condition('revision_id', $revision_ids[4]['revision_id'])
-      ->execute();
+    // Forward time to the expected reactivation start, and then do it.
+    commerce_license_set_time($this->plan_durations[3][0]);
+    $this->postpaid_license->status = COMMERCE_LICENSE_ACTIVE;
+    $this->postpaid_license->save();
 
     // The previous active revision went from 3/4 to 1/4 of the billing cycle
     // so the expected price needs to change.
     $expected_line_items[3]['end'] = $plan_durations[1][1];
-    $expected_line_items[3]['unit_price'] = '2000'; // 20$.
+    $expected_line_items[3]['unit_price'] = '4000'; // 40$.
+    // Remove the old env usage, it will be readded.
     unset($expected_line_items[4]);
     // Add the new active plan.
     $expected_line_items[] = array(
@@ -441,19 +356,26 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       'end' => $this->billing_cycle->end,
     );
     $expected_line_items[] = array(
-      'title' => 'environments usage product',
+      'title' => 'environments usage product (plan B)',
       'product_id' => $env_product->product_id,
-      'unit_price' => '125',
-      'quantity' => 3,
+      'unit_price' => '500', // 5$
+      'quantity' => 4,
       'start' => $plan_durations[1][0],
       'end' => $plan_durations[1][1],
+    );
+    $expected_line_items[] = array(
+      'title' => 'environments usage product (plan B, reactivated)',
+      'product_id' => $env_product->product_id,
+      'unit_price' => '125', // 1.25$
+      'quantity' => 4,
+      'start' => $plan_durations[3][0],
+      'end' => $this->billing_cycle->end,
     );
     $expected_line_items = array_values($expected_line_items);
 
     // Reload the order and re-examine the line items.
     entity_get_controller('commerce_order')->resetCache();
     drupal_static_reset('commerce_license_billing_commerce_order_load');
-    drupal_static_reset('commerce_license_billing_plan_history_list');
     $recurring_order = commerce_order_load($recurring_order->order_id);
     $this->assertLineItems($recurring_order, $expected_line_items);
   }
@@ -462,8 +384,6 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
    * Tests the closing of a billing cycle.
    */
   protected function billingCycleCloseTest() {
-    $postpaid_license = $this->getLicense('postpaid');
-
     // Call the queue item manually.
     $item = new stdClass;
     $item->data = array();
@@ -475,12 +395,13 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $usage_pending = ($recurring_order->status == 'recurring_usage_pending');
     $this->assertTrue($usage_pending, "The billing cycle hasn't been closed because of pending usage");
 
-    // Add usage for the last active plan.
-    $environments = commerce_license_billing_usage_group($postpaid_license, 'environments');
-    $environments->addUsage($postpaid_license->revision_id, 3, $this->plan_durations[3][0]);
+    // Add missing badwidth usage for the last active plan.
+    $plan_history = commerce_license_billing_plan_history_list($this->postpaid_license, $this->billing_cycle);
+    $bandwidth = commerce_license_billing_usage_group($this->postpaid_license, 'bandwidth');
+    $bandwidth->addUsage($plan_history[0]['revision_id'], 2050, $plan_history[0]['start'], $plan_history[0]['end']);
+    $bandwidth->addUsage($plan_history[1]['revision_id'], 1022, $plan_history[1]['start'], $plan_history[1]['end']);
 
     // Retrigger the close, reload the order and re-examine it.
-    drupal_static_reset('commerce_license_billing_usage_history_list');
     entity_get_controller('commerce_order')->resetCache();
     commerce_license_billing_cycle_expiration_queue_process($item);
 
@@ -527,32 +448,65 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   }
 
   /**
-   * Get the license for the provided billing type.
+   * Prepares the data needed for further testing.
    *
-   * @param $billing_type
-   *   The billing type (prepaid or postpaid).
-   *
-   * @return
-   *   The loaded license entity, or FALSE if not found.
+   * Loads $this->prepaid_license and $this->postpaid_license.
+   * Calculates the plan durations and stores them in $this->plan_durations.
    */
-  protected function getLicense($billing_type) {
-    $product_ids = array();
-    if ($billing_type == 'prepaid') {
-      $product_ids[] = $this->prepaid_product->product_id;
-    }
-    else {
-      $product_ids[] = $this->postpaid_product->product_id;
-      $product_ids[] = $this->another_postpaid_product->product_id;
-    }
-
+  protected function prepareData() {
+    // Load the prepaid license.
     $query = new EntityFieldQuery;
     $query
       ->entityCondition('entity_type', 'commerce_license')
-      ->propertyCondition('product_id', $product_ids);
+      ->propertyCondition('product_id', $this->prepaid_product->product_id);
     $result = $query->execute();
-    $license_id = key($result['commerce_license']);
+    $this->prepaid_license = entity_load_single('commerce_license', key($result['commerce_license']));
 
-    return entity_load_single('commerce_license', $license_id);
+    // Load the postpaid license.
+    $postpaid_product_ids = array(
+      $this->postpaid_product->product_id,
+      $this->another_postpaid_product->product_id,
+    );
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'commerce_license')
+      ->propertyCondition('product_id', $postpaid_product_ids);
+    $result = $query->execute();
+    $this->postpaid_license = entity_load_single('commerce_license', key($result['commerce_license']));
+
+    // Update the initial license timestamps to match the beginning of the
+    // initial cycle. Otherwise they won't match, since the checkoutTest()
+    // requests had a different REQUEST_TIME than the main test flow.
+    $this->prepaid_license->granted = $this->billing_cycle->start;
+    $this->prepaid_license->revision_created = $this->billing_cycle->start;
+    $this->prepaid_license->save();
+    $this->postpaid_license->granted = $this->billing_cycle->start;
+    $this->postpaid_license->revision_created = $this->billing_cycle->start;
+    $this->postpaid_license->save();
+    // Do the same for usage.
+    db_update('cl_billing_usage')
+      ->fields(array(
+        'start' => $this->billing_cycle->start,
+        ))
+      ->execute();
+    drupal_static_reset('commerce_license_billing_usage_history_list');
+
+    // Prepare the plan durations.
+    // First plan: 1/4 of the billing cycle, second plan 2/4, suspend 1/8,
+    // reactive second plan 1/8.
+    $billing_cycle_duration = $this->billing_cycle->end - $this->billing_cycle->start;
+    $duration_part = ($billing_cycle_duration + 1) / 8;
+    $first_plan_start = $this->billing_cycle->start;
+    $second_plan_start = $first_plan_start + ($duration_part * 2);
+    $suspension_start = $second_plan_start + ($duration_part * 4);
+    $reactivation_start = $suspension_start + $duration_part;
+    $plan_durations = array();
+    $plan_durations[] = array($first_plan_start, $second_plan_start - 1);
+    $plan_durations[] = array($second_plan_start, $suspension_start - 1);
+    $plan_durations[] = array($suspension_start, $reactivation_start - 1);
+    $plan_durations[] = array($reactivation_start, 0);
+    // Store the plan durations for further test usage.
+    $this->plan_durations = $plan_durations;
   }
 
   /**

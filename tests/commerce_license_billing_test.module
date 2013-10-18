@@ -13,3 +13,12 @@ function commerce_license_billing_test_ctools_plugin_directory($owner, $plugin_t
     return "plugins/$plugin_type";
   }
 }
+
+/**
+ * Implements hook_commerce_license_billing_initial_usage().
+ */
+function commerce_license_billing_test_commerce_license_billing_initial_usage($license, $group_name) {
+  if ($group_name == 'environments') {
+    return 2;
+  }
+}

@@ -215,7 +215,7 @@ function commerce_license_billing_cron() {
   $query = new EntityFieldQuery();
   $query->entityCondition('entity_type', 'cl_billing_cycle')
     ->propertyCondition('status', 1)
-    ->propertyCondition('end', REQUEST_TIME, '<=');
+    ->propertyCondition('end', commerce_license_get_time(), '<=');
   $results = $query->execute();
   if (!empty($results['cl_billing_cycle'])) {
     $billing_cycle_ids = array_keys($results['cl_billing_cycle']);
@@ -761,7 +761,8 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, $
   $zero_price['data'] = commerce_price_component_add($zero_price, 'base_price', $zero_price, TRUE, FALSE);
   // Construct a billing cycle.
   $billing_cycle_type = $product_wrapper->cl_billing_cycle_type->value();
-  $billing_cycle = $billing_cycle_type->getBillingCycle($GLOBALS['user']->uid, REQUEST_TIME, FALSE);
+  $current_time = commerce_license_get_time();
+  $billing_cycle = $billing_cycle_type->getBillingCycle($GLOBALS['user']->uid, $current_time, FALSE);
   // Try to determine the order_id to be set on the line item, used during
   // price calculation. Start by searching for an active recurring order.
   // If not found, see if the user has an active cart, and use its order_id.
@@ -800,7 +801,7 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, $
   // Price the usage.
   $license = entity_create('commerce_license', array('type' => $license_type));
   $license->product_id = $product->product_id;
-  $license->granted = REQUEST_TIME;
+  $license->granted = commerce_license_get_time();
   $license->expires = $billing_cycle->end;
   if ($license instanceof CommerceLicenseBillingUsageInterface && !empty($usage)) {
     $usage_groups = $license->usageGroups();
