@@ -63,9 +63,18 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
    * Implements CommerceLicenseBillingUsageGroupInterface::onRevisionChange().
    */
   public function onRevisionChange() {
+    $previous_status = $this->license->original->status;
+    $new_status = $this->license->status;
+    // The license was activated for the first time. Register initial usage.
+    if ($previous_status < COMMERCE_LICENSE_ACTIVE && $new_status == COMMERCE_LICENSE_ACTIVE) {
+      $initial_usage = $this->initialUsage();
+      if (!is_null($initial_usage)) {
+        $this->addUsage($this->license->revision_id, $initial_usage, REQUEST_TIME);
+      }
+    }
     // A new revision was created, and the previous revision was active.
     // Close previous open usage, reopen for the new revision if still active.
-    if ($previous_status == COMMERCE_LICENSE_ACTIVE) {
+    elseif ($previous_status == COMMERCE_LICENSE_ACTIVE) {
       // Get the quantities of any open usage.
       $data = array(
         ':group_name' => $this->groupName,
@@ -108,5 +117,30 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
       $previous_quantity = $query->fetchField();
       $this->addUsage($this->license->revision_id, $previous_quantity, $current_time);
     }
+  }
+
+  /**
+   * Returns the initial usage.
+   *
+   * @return
+   *   The initial usage to register, or NULL if none found.
+   */
+  protected function initialUsage() {
+    // Try to get the initial usage from a hook.
+    $usage_hook = 'commerce_license_billing_initial_usage';
+    $initial_usage = NULL;
+    foreach (module_implements($usage_hook) as $module) {
+      $initial_usage = module_invoke($module, $usage_hook, $this->license, $this->groupName);
+      if (!is_null($initial_usage)) {
+        // Usage found, stop the search here.
+        break;
+      }
+    }
+    // If no module provided the initial usage, try looking at the group info.
+    if (is_null($initial_usage) && !empty($this->groupInfo['initial_quantity'])) {
+      $initial_usage = $this->groupInfo['initial_quantity'];
+    }
+
+    return $initial_usage;
   }
 }
