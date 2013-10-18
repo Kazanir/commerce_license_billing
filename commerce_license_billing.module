@@ -920,6 +920,8 @@ function commerce_license_billing_commerce_license_presave($license) {
   $status_changed = ($license->status != $license->original->status);
   if ($product_changed || $status_changed) {
     $license->is_new_revision = TRUE;
+    // Reset the static cache to allow new revision data to show up.
+    drupal_static_reset('commerce_license_billing_plan_history_list');
   }
 }
 
