@@ -58,6 +58,7 @@ function commerce_license_billing_entity_info() {
     'base table' => 'cl_billing_cycle',
     'entity class' => 'CommerceLicenseBillingCycle',
     'controller class' => 'EntityAPIController',
+    'metadata controller class' => 'CommerceLicenseBillingCycleMetadataController',
     'label callback' => 'entity_class_label',
     'fieldable' => FALSE,
     'bundles' => array(),
