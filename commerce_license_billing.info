@@ -6,7 +6,6 @@ configure = admin/commerce/config/license-billing
 dependencies[] = advancedqueue
 dependencies[] = commerce_license
 dependencies[] = commerce_order
-dependencies[] = bundleswitcher
 dependencies[] = date
 dependencies[] = list
 

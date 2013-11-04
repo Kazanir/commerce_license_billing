@@ -104,6 +104,7 @@ function commerce_license_billing_cycle_type_get_page_title($op) {
 function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_cycle_type, $op = 'edit') {
   global $user;
   $is_new = !empty($billing_cycle_type->is_new) ? $billing_cycle_type->is_new : FALSE;
+  $entity_info = entity_get_info('cl_billing_cycle_type');
 
   // Set the title.
   drupal_set_title(commerce_license_billing_cycle_type_get_page_title($op), PASS_THROUGH);
@@ -129,6 +130,27 @@ function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_
     '#disabled' => $is_new && $user->uid != 1,
     '#weight' => -9,
   );
+  // If bundleswitcher exists, it will provide the engine form element instead.
+  // If there is only one bundle, there's no point in allowing it to be changed.
+  if (!module_exists('bundleswitcher') && count($entity_info['bundles']) > 1) {
+    $options = array();
+    foreach ($entity_info['bundles'] as $bundle => $bundle_info) {
+      $options[$bundle] = $bundle_info['label'];
+    }
+    $form['engine'] = array(
+      '#type' => 'select',
+      '#title' => t('Engine'),
+      '#options' => $options,
+      '#default_value' => $billing_cycle_type->engine,
+      '#process' => array('commerce_license_billing_cycle_type_engine_process', 'ajax_process_form'),
+      '#element_validate' => array('commerce_license_billing_cycle_type_engine_validate'),
+      '#ajax' => array(
+        'callback' => 'commerce_license_billing_cycle_type_ajax_callback',
+        'method' => 'replace',
+      ),
+      '#weight' => -8,
+    );
+  }
 
   // Add the field related form elements.
   $form['#entity_type'] = 'cl_billing_cycle_type';
@@ -151,16 +173,39 @@ function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_
 }
 
 /**
+ * #process callback for the engine form element.
+ */
+function commerce_license_billing_cycle_type_engine_process($element, &$form_state, &$form) {
+  $element['#ajax']['wrapper'] = $form['#id'];
+  return $element;
+}
+
+/**
+ * #element_validate callback for the engine form element.
+ */
+function commerce_license_billing_cycle_type_engine_validate($element, &$form_state, $form) {
+  if ($element['#value'] != $element['#default_value']) {
+    $form_state['rebuild'] = TRUE;
+    $form_state['cl_billing_cycle_type']->engine = $element['#value'];
+  }
+}
+
+/**
+ * Ajax callback: returns the complete form.
+ */
+function commerce_license_billing_cycle_type_ajax_callback($form, $form_state) {
+  return $form;
+}
+
+/**
  * Submit callback for commerce_license_billing_cycle_type_form().
  */
 function commerce_license_billing_cycle_type_form_submit($form, &$form_state) {
-  $entity_type = $form['#entity_type'];
-  $entity = $form_state[$entity_type];
+  $billing_cycle_type = $form_state['cl_billing_cycle_type'];
+  entity_form_submit_build_entity('cl_billing_cycle_type', $billing_cycle_type, $form, $form_state);
+  entity_save('cl_billing_cycle_type', $billing_cycle_type);
 
-  // Notify field widgets.
-  entity_form_submit_build_entity($entity_type, $entity, $form, $form_state);
-  entity_save($entity_type, $entity);
-  drupal_set_message(t('Billing cycle type %name saved.', array('%name' => $entity->title)));
+  drupal_set_message(t('Billing cycle type %name saved.', array('%name' => $billing_cycle_type->title)));
   drupal_goto('admin/commerce/config/license/billing-cycle-types');
 }
 
