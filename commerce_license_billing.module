@@ -204,7 +204,8 @@ function commerce_license_billing_commerce_order_status_info() {
  * Implements hook_flush_caches().
  */
 function commerce_license_billing_flush_caches() {
-  commerce_license_billing_configure_product_types();
+  $product_types = commerce_license_product_types();
+  commerce_license_billing_configure_product_types($product_types);
   commerce_license_billing_configure_line_item_type();
   commerce_license_billing_configure_order_type();
 }
@@ -1113,8 +1114,11 @@ function commerce_license_billing_usage_clear($license_ids, $group = NULL) {
  * - cl_billing_cycle_type: an entityreference field pointing to the
  *   billing cycle type.
  * - cl_billing_type: an options field for selecting prepaid or postpaid.
+ *
+ * @param $types
+ *   An array of product type machine names.
  */
-function commerce_license_billing_configure_product_types() {
+function commerce_license_billing_configure_product_types($types) {
   $field = field_info_field('cl_billing_cycle_type');
   if (empty($field)) {
     $field = array(
@@ -1130,25 +1134,35 @@ function commerce_license_billing_configure_product_types() {
     );
     field_create_field($field);
   }
-  foreach (commerce_license_product_types() as $type_name) {
-    $instance = field_info_instance('commerce_product', 'cl_billing_cycle_type', $type_name);
+  $existing = array();
+  if (!empty($field['bundles']['commerce_product'])) {
+    $existing = $field['bundles']['commerce_product'];
+  }
+  // Create instances on newly configured product types.
+  foreach (array_diff($types, $existing) as $new_bundle) {
+    $instance = field_info_instance('commerce_product', 'cl_billing_cycle_type', $new_bundle);
     if (empty($instance)) {
-      $license_type_instance = field_info_instance('commerce_product', 'commerce_license_type', $type_name);
+      $duration_instance = field_info_instance('commerce_product', 'commerce_license_duration', $new_bundle);
       $instance = array(
         'field_name' => 'cl_billing_cycle_type',
         'entity_type' => 'commerce_product',
-        'bundle' => $type_name,
+        'bundle' => $new_bundle,
         'label' => 'License billing cycle type',
         'required' => FALSE,
         'widget' => array(
           'type' => 'options_select',
           'module' => 'options',
-          // Make sure that this field is shown right after the license type.
-          'weight' => $license_type_instance['widget']['weight'] + 1,
+          // Make sure that this field is shown right after the duration field.
+          'weight' => $duration_instance['widget']['weight'] + 1,
         ),
       );
       field_create_instance($instance);
     }
+  }
+  // Remove instances from product types that can no longer have licenses.
+  foreach (array_diff($existing, $types) as $removed_bundle) {
+    $instance = field_info_instance('commerce_product', 'cl_billing_cycle_type', $removed_bundle);
+    field_delete_instance($instance, TRUE);
   }
 
   $field = field_info_field('cl_billing_type');
@@ -1169,25 +1183,36 @@ function commerce_license_billing_configure_product_types() {
     );
     field_create_field($field);
   }
-  foreach (commerce_license_product_types() as $type_name) {
-    $instance = field_info_instance('commerce_product', 'cl_billing_type', $type_name);
+
+  $existing = array();
+  if (!empty($field['bundles']['commerce_product'])) {
+    $existing = $field['bundles']['commerce_product'];
+  }
+  // Create instances on newly configured product types.
+  foreach (array_diff($types, $existing) as $new_bundle) {
+    $instance = field_info_instance('commerce_product', 'cl_billing_type', $new_bundle);
     if (empty($instance)) {
-      $license_type_instance = field_info_instance('commerce_product', 'commerce_license_type', $type_name);
+      $duration_instance = field_info_instance('commerce_product', 'commerce_license_duration', $new_bundle);
       $instance = array(
         'field_name' => 'cl_billing_type',
         'entity_type' => 'commerce_product',
-        'bundle' => $type_name,
+        'bundle' => $new_bundle,
         'label' => 'License billing type',
         'required' => TRUE,
         'widget' => array(
           'type' => 'options_buttons',
           'module' => 'options',
           // Make sure that this field is shown right after the billing cycle type.
-          'weight' => $license_type_instance['widget']['weight'] + 1,
+          'weight' => $duration_instance['widget']['weight'] + 2,
         ),
       );
       field_create_instance($instance);
     }
+  }
+  // Remove instances from product types that can no longer have licenses.
+  foreach (array_diff($existing, $types) as $removed_bundle) {
+    $instance = field_info_instance('commerce_product', 'cl_billing_type', $removed_bundle);
+    field_delete_instance($instance, TRUE);
   }
 }
 
