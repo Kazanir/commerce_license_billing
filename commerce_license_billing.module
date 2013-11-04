@@ -1199,6 +1199,9 @@ function commerce_license_billing_configure_product_types($types) {
         'bundle' => $new_bundle,
         'label' => 'License billing type',
         'required' => TRUE,
+        'default_value' => array(
+          array('value' => 'prepaid'),
+        ),
         'widget' => array(
           'type' => 'options_buttons',
           'module' => 'options',
@@ -1358,6 +1361,33 @@ function commerce_license_billing_configure_order_type() {
       ),
     );
     field_create_instance($instance);
+  }
+}
+
+/**
+ * Implements hook_field_widget_form_alter().
+ */
+function commerce_license_billing_field_widget_form_alter(&$element, &$form_state, $context) {
+  if ($context['field']['field_name'] == 'cl_billing_type') {
+    // Build the path to the cl_billing_cycle_type widget, taking into account
+    // all field parents. This ensures that #states work for embedded forms
+    // such as the IEF one.
+    $parents = $element['#field_parents'];
+    $parents[] = 'cl_billing_cycle_type';
+    $parents[] = $element['#language'];
+    $name = '';
+    foreach ($parents as $name_part) {
+      if (empty($name)) {
+        $name = $name_part;
+      }
+      else {
+        $name .= '[' . $name_part . ']';
+      }
+    }
+
+    $element['#states']['invisible'] = array(
+      ':input[name="' . $name . '"]' => array('value' => '_none'),
+    );
   }
 }
 
