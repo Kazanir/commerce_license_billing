@@ -108,6 +108,12 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
    * Implements CommerceLicenseBillingUsageGroupInterface::addUsage().
    */
   public function addUsage($revisionId, $quantity, $start, $end) {
+    // Make sure that usage is being registered for an active revision.
+    $revision = entity_revision_load('commerce_license', $revisionId);
+    if ($revision->status != COMMERCE_LICENSE_ACTIVE) {
+      throw new Exception('Tried to register usage for a non-active revision #' . $revisionId);
+    }
+
     // Add the usage record.
     db_insert('cl_billing_usage')
       ->fields(array(

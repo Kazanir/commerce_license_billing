@@ -335,6 +335,21 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $this->postpaid_license->status = COMMERCE_LICENSE_SUSPENDED;
     $this->postpaid_license->save();
 
+    // Try to register usage for the suspended revision, make sure it fails.
+    $suspended_revision_id = $this->postpaid_license->revision_id;
+    $environments = commerce_license_billing_usage_group($this->postpaid_license, 'environments');
+    try {
+      $environments->addUsage($suspended_revision_id, 4, REQUEST_TIME);
+    }
+    catch (Exception $e) {
+      $message = $e->getMessage();
+      $expected_message = 'Tried to register usage for a non-active revision #' . $suspended_revision_id;
+      $this->assertEqual($message, $expected_message, 'Could not register usage for a non-active revision');
+    }
+    if (!isset($message)) {
+      $this->assertTrue(FALSE, 'Could not register usage for a non-active revision');
+    }
+
     // Forward time to the expected reactivation start, and then do it.
     commerce_license_set_time($this->plan_durations[3][0]);
     $this->postpaid_license->status = COMMERCE_LICENSE_ACTIVE;
