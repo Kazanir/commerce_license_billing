@@ -529,7 +529,7 @@ function commerce_license_billing_commerce_order_load($orders) {
 
   foreach ($orders as $order) {
     // Refresh only if this is a recurring order and it hasn't been refreshed.
-    if (!isset($refreshed[$order->order_id]) && in_array($order->status, $recurring_statuses)) {
+    if (!isset($refreshed[$order->order_id]) && $order->type == 'recurring' && in_array($order->status, $recurring_statuses)) {
       // Refresh the order and add its ID to the refreshed array.
       $refreshed[$order->order_id] = TRUE;
       commerce_license_billing_order_refresh($order);
