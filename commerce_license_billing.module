@@ -1108,6 +1108,17 @@ function commerce_license_billing_usage_clear($license_ids, $group = NULL) {
 }
 
 /**
+ * Implements hook_field_access().
+ *
+ * Prevents the cl_billing_cycle field from showing up on the order edit form.
+ */
+function commerce_license_billing_field_access($op, $field, $entity_type, $entity, $account) {
+  if ($field['field_name'] == 'cl_billing_cycle' && $op == 'edit') {
+    return FALSE;
+  }
+}
+
+/**
  * Ensures that the license product types have the required billing fields.
  *
  * Fields:
