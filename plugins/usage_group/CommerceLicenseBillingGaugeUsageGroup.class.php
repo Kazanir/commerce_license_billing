@@ -46,6 +46,11 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
    * Implements CommerceLicenseBillingUsageGroupInterface::chargeableUsage().
    */
   public function chargeableUsage(CommerceLicenseBillingCycle $billingCycle) {
+    if (!empty($this->groupInfo['not_charged'])) {
+      // This usage group shouldn't be charged.
+      return array();
+    }
+
     $usage = $this->usageHistory($billingCycle);
     $free_quantities = $this->freeQuantities($billingCycle);
     // Remove any usage that is free according to the active plan.

@@ -32,6 +32,9 @@ interface CommerceLicenseBillingUsageInterface {
    *   from the total quantity. For type 'gauge' this means that the gauge
    *   values that equal free_quantity are ignored.
    * Optional keys for the 'gauge' type.
+   * - not_charged: If TRUE, no charges for this usage group will be added to
+   *   the order. Useful for use cases that require usage to be tracked, but
+   *   where the charging happens through other methods (i.e. sublicenses).
    * - immediate: Whether usage changes are guaranteed to be reported right
    *   away. If TRUE, the usage is open-ended and will be carried over into next
    *   billing cycles.
