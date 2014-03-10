@@ -639,7 +639,7 @@ function commerce_license_billing_order_refresh($order) {
 function commerce_license_billing_collect_charges($license, $billing_cycle) {
   $charges = array();
   // Charge the plan.
-  // In case of prepaid, the plan charge is always for the next billing cycle.
+  // In case of prepaid, the plan charge is for the entire next billing cycle.
   // In case of postpaid, all plan changes in the current month are charged.
   $product_wrapper = $license->wrapper->product;
   if ($product_wrapper->cl_billing_type->value() == 'prepaid') {
@@ -653,6 +653,7 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
       'cl_billing_start' => $next_billing_cycle->start,
       'cl_billing_end' => $next_billing_cycle->end,
       'match' => array('commerce_product'),
+      'prorate' => FALSE,
     );
   }
   elseif ($product_wrapper->cl_billing_type->value() == 'postpaid') {
@@ -675,6 +676,7 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
         'cl_billing_start' => $history_record['start'],
         'cl_billing_end' => $history_record['end'],
         'match' => array('commerce_product', 'cl_billing_start'),
+        'prorate' => TRUE,
       );
     }
   }
@@ -696,6 +698,7 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
           'cl_billing_start' => $usage_record['start'],
           'cl_billing_end' => $usage_record['end'],
           'match' => array('commerce_product', 'cl_billing_start'),
+          'prorate' => TRUE,
         );
       }
     }
@@ -721,7 +724,7 @@ function commerce_license_billing_prorate_charges(&$charges, $billing_cycle) {
   $billing_cycle_duration = $billing_cycle->end - $billing_cycle->start;
   foreach ($charges as $key => &$charge) {
     $price = &$charge['commerce_unit_price'];
-    if ($price['amount'] > 0) {
+    if ($charge['prorate'] && $price['amount'] > 0) {
       $duration = $charge['cl_billing_end'] - $charge['cl_billing_start'];
       $price['amount'] = $price['amount'] * ($duration / $billing_cycle_duration);
       $price['amount'] = round($price['amount']);
