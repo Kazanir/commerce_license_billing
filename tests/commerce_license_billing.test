@@ -591,7 +591,6 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     );
     $this->drupalPost(NULL, $info, 'Continue to next step');
     $this->drupalPost(NULL, array(), 'Continue to next step');
-    $this->drupalPost(NULL, array('commerce_payment[payment_details][name]' => 'Example payment method'), 'Continue to next step');
     $this->assertTitle('Checkout complete' . ' | Drupal', 'Checkout has been completed');
   }
 
