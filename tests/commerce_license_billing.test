@@ -443,7 +443,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       if ($new_recurring_order && $new_recurring_order->status == 'recurring_open') {
         $opened_new_order = TRUE;
       }
-      $this->assertTrue($opened_new_order, 'A new recurring order was successfuly opened').
+      $this->assertTrue($opened_new_order, 'A new recurring order was successfuly opened');
 
       $licenses = commerce_license_billing_get_recurring_order_licenses($new_recurring_order);
       $licenses_renewed = (count($licenses) == 2);
