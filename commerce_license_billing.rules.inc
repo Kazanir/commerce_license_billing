@@ -8,8 +8,8 @@
  * Implements hook_rules_condition_info().
  */
 function commerce_license_billing_rules_condition_info() {
-  $conditions['commerce_license_billing_product_is_postpaid'] = array(
-    'label' => t('Product is postpaid'),
+  $conditions['commerce_license_billing_product_elligible'] = array(
+    'label' => t('Product is elligible for recurring'),
     'parameter' => array(
       'commerce_product' => array(
         'type' => 'commerce_product',
@@ -18,7 +18,7 @@ function commerce_license_billing_rules_condition_info() {
     ),
     'group' => t('Commerce License Billing'),
     'callbacks' => array(
-      'execute' => 'commerce_license_billing_product_postpaid_condition',
+      'execute' => 'commerce_license_billing_product_elligible_condition',
     ),
   );
   $conditions['commerce_license_billing_order_elligible'] = array(
@@ -34,6 +34,7 @@ function commerce_license_billing_rules_condition_info() {
       'execute' => 'commerce_license_billing_order_elligible_condition',
     ),
   );
+
   return $conditions;
 }
 
@@ -54,23 +55,15 @@ function commerce_license_billing_rules_action_info() {
       'execute' => 'commerce_license_billing_create_recurring_orders_action',
     ),
   );
+
   return $actions;
 }
 
 /**
- * Rules condition callback: check if the product is postpaid.
+ * Rules condition callback: check if a product is elligible for recurring.
  */
-function commerce_license_billing_product_postpaid_condition($product) {
-  // Only return TRUE if the product has a billing cycle type selected
-  // (meaning that it has enabled billing).
-  if (!empty($product->cl_billing_cycle_type)) {
-    $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
-    if ($product_wrapper->cl_billing_type->value() == 'postpaid') {
-      return TRUE;
-    }
-  }
-
-  return FALSE;
+function commerce_license_billing_product_elligible_condition($product) {
+  return !empty($product->cl_billing_cycle_type);
 }
 
 /**
