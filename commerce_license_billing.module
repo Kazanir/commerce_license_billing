@@ -948,6 +948,16 @@ function commerce_license_billing_commerce_license_update($license) {
 }
 
 /**
+ * Implements hook_commerce_license_delete().
+ */
+function commerce_license_billing_commerce_license_delete($license) {
+  // Delete usage records.
+  $delete = db_delete('cl_billing_usage');
+  $delete->condition('license_id', $license->license_id);
+  $delete->execute();
+}
+
+/**
  * Changes the license plan.
  *
  * @todo
