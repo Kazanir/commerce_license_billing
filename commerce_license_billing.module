@@ -1056,15 +1056,25 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
  */
 function commerce_license_billing_usage_history_list($license, $billing_cycle) {
   $history = &drupal_static(__FUNCTION__, array());
-  if (!isset($history[$license->license_id])) {
-    $history[$license->license_id] = array();
+  if (!isset($history[$billing_cycle->billing_cycle_id][$license->license_id])) {
     $data = array(
       ':license_id' => $license->license_id,
+      ':start' => $billing_cycle->start,
+      ':end' => $billing_cycle->end,
     );
+    // Fetch usage records that started or ended in this billing cycle, or are
+    // still in progress.
     $result = db_query("SELECT * FROM {cl_billing_usage}
                           WHERE license_id = :license_id
-                            ORDER BY start ASC", $data);
+                              AND (
+                                (start BETWEEN :start AND :end) OR
+                                (end BETWEEN :start AND :end) OR
+                                (end = 0)
+                              )
+                          ORDER BY start ASC", $data);
     $usage_history = $result->fetchAll(PDO::FETCH_ASSOC);
+
+    $group_history = array();
     foreach ($usage_history as $index => &$usage_record) {
       // Adjust the start and end timestamps for the current billing cycle.
       if ($usage_record['start'] < $billing_cycle->start) {
@@ -1074,11 +1084,14 @@ function commerce_license_billing_usage_history_list($license, $billing_cycle) {
         $usage_record['end'] = $billing_cycle->end;
       }
       // Group the records by usage group.
-      $history[$license->license_id][$usage_record['usage_group']][] = $usage_record;
+      $group_history[$usage_record['usage_group']][] = $usage_record;
     }
+
+    // Add the data to the static cache.
+    $history[$billing_cycle->billing_cycle_id][$license->license_id] = $group_history;
   }
 
-  return $history[$license->license_id];
+  return $history[$billing_cycle->billing_cycle_id][$license->license_id];
 }
 
 /**
