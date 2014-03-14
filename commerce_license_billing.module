@@ -988,6 +988,8 @@ function commerce_license_billing_change_plan($license, $product_id) {
  *   - status: The status of the entry.
  *   - start: The start timestamp.
  *   - end: The end timestamp.
+ *   - revision: The loaded revision, so that it doesn't need to be loaded
+ *     separately by each usage group (freeQuantities()).
  */
 function commerce_license_billing_plan_history_list($license, $billing_cycle) {
   $history = &drupal_static(__FUNCTION__, array());
@@ -1011,6 +1013,11 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
     $license_history = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($license_history as $index => $history_record) {
+      // Filter out non-active records.
+      if ($history_record['status'] != COMMERCE_LICENSE_ACTIVE) {
+        unset($license_history[$index]);
+        continue;
+      }
       // Adjust the start and end timestamps for the current billing cycle.
       if ($history_record['start'] < $billing_cycle->start) {
         $license_history[$index]['start'] = $billing_cycle->start;
@@ -1018,10 +1025,8 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
       if (empty($history_record['end'])) {
         $license_history[$index]['end'] = $billing_cycle->end;
       }
-      // Filter out non-active records.
-      if ($history_record['status'] != COMMERCE_LICENSE_ACTIVE) {
-        unset($license_history[$index]);
-      }
+      // Load the referenced revision.
+      $license_history[$index]['revision'] = entity_revision_load('commerce_license', $history_record['revision_id']);
     }
     $license_history = array_values($license_history);
 

@@ -178,17 +178,11 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
    */
   protected function freeQuantities(CommerceLicenseBillingCycle $billingCycle) {
     $free_quantities = array();
-    // Start with the free usage given by the current license revision.
-    $free_quantities[$this->license->revision_id] = $this->groupInfo['free_quantity'];
-    // Now get the free usage given by all other referenced revisions.
     $plan_history = commerce_license_billing_plan_history_list($this->license, $billingCycle);
     foreach ($plan_history as $history_record) {
-      if ($history_record['revision_id'] != $this->license->revision_id) {
-        $revision = entity_revision_load('commerce_license', $history_record['revision_id']);
-        $revision_usage_groups = $revision->usageGroups();
-        $revision_group_info = $revision_usage_groups[$this->groupName];
-        $free_quantities[$history_record['revision_id']] = $revision_group_info['free_quantity'];
-      }
+      $revision_usage_groups = $history_record['revision']->usageGroups();
+      $revision_group_info = $revision_usage_groups[$this->groupName];
+      $free_quantities[$history_record['revision_id']] = $revision_group_info['free_quantity'];
     }
 
     return $free_quantities;
