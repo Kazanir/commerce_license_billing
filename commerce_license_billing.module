@@ -300,7 +300,7 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
       $license_ids[] = $license->license_id;
     }
     // Clear all closed usage, it's now irrelevant.
-    commerce_license_billing_usage_clear($license_ids);
+    commerce_license_billing_usage_history_clear($license_ids, $billing_cycle);
 
     // Generate a new recurring order.
     commerce_license_billing_generate_recurring_order($order, $next_billing_cycle, $licenses);
@@ -1095,6 +1095,28 @@ function commerce_license_billing_usage_history_list($license, $billing_cycle) {
 }
 
 /**
+ * Clears closed usage records.
+ *
+ * @param $license_ids
+ *   An array of license ids.
+ * @param $billing_cycle
+ *   The billing cycle entity.
+ */
+function commerce_license_billing_usage_history_clear($license_ids, $billing_cycle) {
+  $delete = db_delete('cl_billing_usage');
+  $delete->condition('license_id', $license_ids);
+  // Match closed records that started or ended in the provided billing cycle.
+  $cycle_duration = array($billing_cycle->start, $billing_cycle->end);
+  $or = db_or();
+  $or->condition('start', $cycle_duration, 'BETWEEN');
+  $or->condition('end', $cycle_duration, 'BETWEEN');
+  $delete->condition($or);
+  $delete->condition('end', 0, '!=');
+
+  $delete->execute();
+}
+
+/**
  * Returns a usage group plugin.
  *
  * @param $license
@@ -1115,19 +1137,6 @@ function commerce_license_billing_usage_group($license, $group_name) {
   $plugin = $plugins[$group_info['type']];
 
   return new $plugin['class']($license, $group_name, $group_info);
-}
-
-/**
- * Clears closed usage records for the provided license ids.
- *
- * @param $license_ids
- *   An array of license ids.
- */
-function commerce_license_billing_usage_clear($license_ids, $group = NULL) {
-  $delete = db_delete('cl_billing_usage');
-  $delete->condition('license_id', $license_ids);
-  $delete->condition('end', 0, '!=');
-  $delete->execute();
 }
 
 /**
