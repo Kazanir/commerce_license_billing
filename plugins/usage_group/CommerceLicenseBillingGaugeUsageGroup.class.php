@@ -10,7 +10,12 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
   /**
    * Overrides CommerceLicenseBillingUsageBase::addUsage().
    */
-  public function addUsage($revisionId, $quantity, $start, $end = 0) {
+  public function addUsage($revisionId, $quantity, $start = NULL, $end = 0) {
+    if (is_null($start)) {
+      // Default $start to current time.
+      $start = commerce_license_get_time();
+    }
+
     // Close the previous usage.
     $previous_end = $start - 1;
     db_update('cl_billing_usage')

@@ -339,7 +339,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $suspended_revision_id = $this->postpaid_license->revision_id;
     $environments = commerce_license_billing_usage_group($this->postpaid_license, 'environments');
     try {
-      $environments->addUsage($suspended_revision_id, 4, REQUEST_TIME);
+      $environments->addUsage($suspended_revision_id, 4);
     }
     catch (Exception $e) {
       $message = $e->getMessage();
