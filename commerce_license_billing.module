@@ -993,24 +993,24 @@ function commerce_license_billing_change_plan($license, $product_id) {
  */
 function commerce_license_billing_plan_history_list($license, $billing_cycle) {
   $history = &drupal_static(__FUNCTION__, array());
-  if (!isset($history[$license->license_id])) {
+  if (!isset($history[$billing_cycle->billing_cycle_id][$license->license_id])) {
+    $data = array(
+      ':license_id' => $license->license_id,
+      ':start' => $billing_cycle->start,
+      ':end' => $billing_cycle->end,
+    );
     // Fetch revisions that started or ended in this billing cycle, or are still
     // in progress.
-    $cycle_duration = array($billing_cycle->start, $billing_cycle->end);
-    $or = db_or();
-    $or->condition('revision_created', $cycle_duration, 'BETWEEN');
-    $or->condition('revision_ended', $cycle_duration, 'BETWEEN');
-    $or->condition('revision_ended', 0);
-
-    $query = db_select('commerce_license_revision', 'clr');
-    $query->addField('clr', 'revision_id');
-    $query->addField('clr', 'product_id');
-    $query->addField('clr', 'status');
-    $query->addField('clr', 'revision_created', 'start');
-    $query->addField('clr', 'revision_ended', 'end');
-    $query->condition('license_id', $license->license_id);
-    $query->condition($or);
-    $license_history = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
+    $result = db_query("SELECT revision_id, product_id, status,
+                          revision_created AS start, revision_ended AS end
+                          FROM {commerce_license_revision}
+                          WHERE license_id = :license_id
+                              AND (
+                                (revision_created BETWEEN :start AND :end) OR
+                                (revision_ended BETWEEN :start AND :end) OR
+                                (revision_ended = 0)
+                              )", $data);
+    $license_history = $result->fetchAll(PDO::FETCH_ASSOC);
 
     foreach ($license_history as $index => $history_record) {
       // Filter out non-active records.
@@ -1031,10 +1031,10 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
     $license_history = array_values($license_history);
 
     // Add the data to the static cache.
-    $history[$license->license_id] = $license_history;
+    $history[$billing_cycle->billing_cycle_id][$license->license_id] = $license_history;
   }
 
-  return $history[$license->license_id];
+  return $history[$billing_cycle->billing_cycle_id][$license->license_id];
 }
 
 /**
