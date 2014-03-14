@@ -116,6 +116,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $this->drupalGet($this->getCommerceUrl('cart'));
     $this->assertText($this->prepaid_product->title, 'The prepaid license product is present in the cart view');
     $this->assertText($this->postpaid_product->title, 'The postpaid license product is present in the cart view');
+    $this->assertText('$50.00', 'The prepaid license product is correctly priced at $50.00');
     $this->assertText('$0.00', 'The postpaid license product is correctly priced at $0.00');
 
     // Complete checkout

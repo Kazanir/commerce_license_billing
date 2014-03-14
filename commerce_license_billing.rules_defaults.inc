@@ -53,6 +53,53 @@ function commerce_license_billing_default_rules_configuration() {
       ]
     }
   }');
+  $items['commerce_license_billing_prorate_prepaid_product_price'] = entity_import('rules_config', '{ "commerce_license_billing_prorate_prepaid_product_price" : {
+      "LABEL" : "Prorate the price of prepaid products",
+      "PLUGIN" : "reaction rule",
+      "OWNER" : "rules",
+      "TAGS" : [ "Commerce License Billing" ],
+      "REQUIRES" : [ "rules", "commerce_license_billing", "commerce_product_reference" ],
+      "ON" : { "commerce_product_calculate_sell_price" : [] },
+      "IF" : [
+        { "NOT entity_is_of_bundle" : {
+            "entity" : [ "commerce-line-item" ],
+            "type" : "commerce_line_item",
+            "bundle" : { "value" : { "recurring" : "recurring" } }
+          }
+        },
+        { "entity_has_field" : { "entity" : [ "commerce-line-item" ], "field" : "commerce_product" } },
+        { "commerce_license_billing_product_elligible" : { "commerce_product" : [ "commerce-line-item:commerce-product" ] } },
+        { "entity_has_field" : {
+            "entity" : [ "commerce-line-item:commerce-product" ],
+            "field" : "cl_billing_type"
+          }
+        },
+        { "data_is" : {
+            "data" : [ "commerce-line-item:commerce-product:cl-billing-type" ],
+            "value" : "prepaid"
+          }
+        },
+        { "entity_has_field" : {
+            "entity" : [ "commerce-line-item:commerce-product" ],
+            "field" : "cl_billing_cycle_type"
+          }
+        },
+        { "entity_has_field" : {
+            "entity" : [ "commerce-line-item:commerce-product:cl-billing-cycle-type" ],
+            "field" : "pce_async"
+          }
+        },
+        { "data_is" : {
+            "data" : [ "commerce-line-item:commerce-product:cl-billing-cycle-type:pce-async" ],
+            "value" : 0
+          }
+        }
+      ],
+      "DO" : [
+        { "commerce_license_billing_prorate_line_item" : { "commerce_line_item" : [ "commerce_line_item" ] } }
+      ]
+    }
+  }');
   $items['commerce_license_billing_create_recurring_orders'] = entity_import('rules_config', '{ "commerce_license_billing_create_recurring_orders" : {
       "LABEL" : "Create recurring orders based on the initial order",
       "PLUGIN" : "reaction rule",

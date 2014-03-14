@@ -55,6 +55,19 @@ function commerce_license_billing_rules_action_info() {
       'execute' => 'commerce_license_billing_create_recurring_orders_action',
     ),
   );
+  $actions['commerce_license_billing_prorate_line_item'] = array(
+    'label' => t('Prorate line item'),
+    'parameter' => array(
+      'commerce_line_item' => array(
+        'type' => 'commerce_line_item',
+        'label' => t('Line item'),
+      ),
+    ),
+    'group' => t('Commerce License Billing'),
+    'callbacks' => array(
+      'execute' => 'commerce_license_billing_prorate_line_item_action',
+    ),
+  );
 
   return $actions;
 }
@@ -94,4 +107,38 @@ function commerce_license_billing_order_elligible_condition($order) {
  */
 function commerce_license_billing_create_recurring_orders_action($order) {
   commerce_license_billing_create_recurring_orders($order);
+}
+
+/**
+ * Rules action callback: Prorate line item.
+ */
+function commerce_license_billing_prorate_line_item_action($line_item) {
+  $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+  $product_wrapper = $line_item_wrapper->commerce_product;
+  $product = $product_wrapper->value();
+  if (empty($product->cl_billing_cycle_type)) {
+    // The product that is not elligible for recurring.
+    return;
+  }
+
+  // Construct a possible billing cycle for this product.
+  $time = commerce_license_get_time();
+  $billing_cycle_type = $product_wrapper->cl_billing_cycle_type->value();
+  $billing_cycle = $billing_cycle_type->getBillingCycle(0, $time, FALSE);
+  // Construct a charge that starts now and ends with the billing cycle.
+  $charges = array();
+  $charges[0] = array(
+    'commerce_product' => $product,
+    'quantity' => 1,
+    'commerce_unit_price' => $product_wrapper->commerce_price->value(),
+    'cl_billing_start' => $time,
+    'cl_billing_end' => $billing_cycle->end,
+    'prorate' => TRUE,
+  );
+  commerce_license_billing_prorate_charges($charges, $billing_cycle);
+
+  // Set the prorated amount on the line item.
+  $price = $charges[0]['commerce_unit_price'];
+  $line_item_wrapper->commerce_unit_price = $price;
+  $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add($price, 'base_price', $price, TRUE);
 }

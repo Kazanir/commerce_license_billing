@@ -707,6 +707,13 @@ function commerce_license_billing_collect_charges($license, $billing_cycle) {
   // Prorate the collected charges.
   commerce_license_billing_prorate_charges($charges, $billing_cycle);
 
+  // Remove any charges that are too small.
+  foreach ($charges as $key => $charge) {
+    if ($charge['commerce_unit_price']['amount'] < 1) {
+      unset($charges[$key]);
+    }
+  }
+
   return $charges;
 }
 
@@ -728,11 +735,6 @@ function commerce_license_billing_prorate_charges(&$charges, $billing_cycle) {
       $duration = $charge['cl_billing_end'] - $charge['cl_billing_start'];
       $price['amount'] = $price['amount'] * ($duration / $billing_cycle_duration);
       $price['amount'] = round($price['amount']);
-
-      // Remove the charge, it is too small.
-      if ($price['amount'] < 1) {
-        unset($charges[$key]);
-      }
     }
   }
 }
