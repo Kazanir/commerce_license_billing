@@ -1122,8 +1122,10 @@ function commerce_license_billing_usage_history_clear($license_ids, $billing_cyc
   $or->condition('end', $cycle_duration, 'BETWEEN');
   $delete->condition($or);
   $delete->condition('end', 0, '!=');
-
   $delete->execute();
+
+  // Reset the usage history static cache.
+  drupal_static_reset('commerce_license_billing_usage_history_list');
 }
 
 /**
