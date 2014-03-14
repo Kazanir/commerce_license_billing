@@ -411,11 +411,12 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $usage_pending = ($recurring_order->status == 'recurring_usage_pending');
     $this->assertTrue($usage_pending, "The billing cycle hasn't been closed because of pending usage");
 
-    // Add missing badwidth usage for the last active plan.
+    // Add missing badwidth usage for the postpaid license.
     $plan_history = commerce_license_billing_plan_history_list($this->postpaid_license, $this->billing_cycle);
     $bandwidth = commerce_license_billing_usage_group($this->postpaid_license, 'bandwidth');
     $bandwidth->addUsage($plan_history[0]['revision_id'], 2050, $plan_history[0]['start'], $plan_history[0]['end']);
     $bandwidth->addUsage($plan_history[1]['revision_id'], 1022, $plan_history[1]['start'], $plan_history[1]['end']);
+    $bandwidth->addUsage($plan_history[2]['revision_id'], 0, $plan_history[2]['start'], $plan_history[2]['end']);
 
     // Retrigger the close, reload the order and re-examine it.
     entity_get_controller('commerce_order')->resetCache();

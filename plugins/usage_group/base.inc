@@ -144,22 +144,22 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
    * Implements CommerceLicenseBillingUsageGroupInterface::isComplete().
    */
   public function isComplete(CommerceLicenseBillingCycle $billingCycle) {
+    // If the usage records are complete, then the sum of their durations
+    // will be the same as the sum of plan durations.
+    // Every plan or usage record ends a second before the next one, so
+    // the equation needs to add 1s to each record to get the correct duration.
     $plan_history = commerce_license_billing_plan_history_list($this->license, $billingCycle);
-    $is_complete = TRUE;
+    $plan_duration = 0;
     foreach ($plan_history as $history_record) {
-      $usage_history = $this->usageHistory($billingCycle);
-      $remaining_gap = ($history_record['end'] - $history_record['start']);
-      foreach ($usage_history as $usage_record) {
-        $remaining_gap -= ($usage_record['end'] - $usage_record['start'] + 1);
-      }
-
-      if ($remaining_gap > 0) {
-        $is_complete = FALSE;
-        break;
-      }
+      $plan_duration += ($history_record['end'] - $history_record['start'] + 1);
+    }
+    $usage_history = $this->usageHistory($billingCycle);
+    $usage_duration = 0;
+    foreach ($usage_history as $usage_record) {
+      $usage_duration += ($usage_record['end'] - $usage_record['start'] + 1);
     }
 
-    return $is_complete;
+    return $plan_duration == $usage_duration;
   }
 
   /**
