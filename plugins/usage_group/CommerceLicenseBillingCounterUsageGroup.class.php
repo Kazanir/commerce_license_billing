@@ -10,16 +10,23 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
   /**
    * Implements CommerceLicenseBillingUsageGroupInterface::currentUsage().
    */
-  public function currentUsage() {
-    $data = array(
-      ':license_id' => $this->license->license_id,
-      ':group' => $this->groupName,
-    );
-    $usage = db_query("SELECT SUM(quantity) FROM {cl_billing_usage}
-                    WHERE license_id = :license_id AND usage_group = :group
-                      GROUP BY license_id, usage_group", $data)->fetchColumn();
+  public function currentUsage($billingCycle = NULL) {
+    if (is_null($billingCycle)) {
+      // Default to the current billing cycle.
+      $billingCycle = commerce_license_billing_get_license_billing_cycle($this->license);
+    }
 
-    return $usage;
+    // Sum up all usage for the current billing cycle and revisions up to
+    // (and including) the current one.
+    $current_usage = 0;
+    $usage = $this->usageHistory($billingCycle);
+    foreach ($usage as $usage_record) {
+      if ($usage_record['revision_id'] <= $this->license->revision_id) {
+        $current_usage += $usage_record['quantity'];
+      }
+    }
+
+    return $current_usage;
   }
 
   /**

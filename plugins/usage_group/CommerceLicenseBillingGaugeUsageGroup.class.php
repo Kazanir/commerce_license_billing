@@ -35,16 +35,27 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
   /**
    * Implements CommerceLicenseBillingUsageGroupInterface::currentUsage().
    */
-  public function currentUsage() {
-    $data = array(
-      ':license_id' => $this->license->license_id,
-      ':group' => $this->groupName,
-    );
-    $usage = db_query("SELECT quantity FROM {cl_billing_usage}
-                    WHERE license_id = :license_id AND usage_group = :group
-                      ORDER BY start DESC, usage_id DESC LIMIT 1", $data)->fetchColumn();
+  public function currentUsage($billingCycle = NULL) {
+    if (is_null($billingCycle)) {
+      // Default to the current billing cycle.
+      $billingCycle = commerce_license_billing_get_license_billing_cycle($this->license);
+    }
 
-    return $usage;
+    // Get the quantity of the usage record with the highest usage_id
+    // for the current revision and billing cycle.
+    $current_usage = 0;
+    $previous_usage_id = 0;
+    $usage = $this->usageHistory($billingCycle);
+    foreach ($usage as $usage_record) {
+      if ($usage_record['revision_id'] == $this->license->revision_id) {
+        if ($usage_record['usage_id'] > $previous_usage_id) {
+          $current_usage = $usage_record['quantity'];
+          $previous_usage_id = $usage_record['usage_id'];
+        }
+      }
+    }
+
+    return $current_usage;
   }
 
   /**

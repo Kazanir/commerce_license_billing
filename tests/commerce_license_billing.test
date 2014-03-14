@@ -249,7 +249,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $bandwidth->addUsage($this->prepaid_license->revision_id, 2050, $first_usage_start, $first_usage_end);
     $bandwidth->addUsage($this->prepaid_license->revision_id, 1022, $second_usage_start, $second_usage_end);
     // Confirm the correct current usage.
-    $current_usage = $bandwidth->currentUsage();
+    $current_usage = $bandwidth->currentUsage($this->billing_cycle);
     $this->assertEqual($current_usage, 3072, 'Current bandwidth usage matches total reported quantity');
 
     // Forward time to expected start of plan B.
@@ -257,7 +257,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
 
     // Confirm that the environments gauge has the correct initial value.
     $environments = commerce_license_billing_usage_group($this->postpaid_license, 'environments');
-    $initial_usage = (int) $environments->currentUsage();
+    $initial_usage = (int) $environments->currentUsage($this->billing_cycle);
     $this->assertTrue($initial_usage === 2, 'The initial environment usage was successfuly opened.');
     // Register new usage for the second plan.
     $environments->addUsage($plan_history[1]['revision_id'], 4, $second_usage_start);
@@ -267,7 +267,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $first_record_closed = ($usage_history[1]['end'] + 1 == $usage_history[2]['start']);
     $this->assertTrue($first_record_closed, 'The first environment usage history record was successfuly closed');
     // Confirm the correct current usage.
-    $current_usage = $environments->currentUsage();
+    $current_usage = $environments->currentUsage($this->billing_cycle);
     $this->assertEqual($current_usage, 4, 'Current environment usage matches last reported quantity');
   }
 
@@ -454,7 +454,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
         if ($license->expires != $new_billing_cycle->end) {
           $licenses_renewed = FALSE;
         }
-        $bandwidth_usage = commerce_license_billing_usage_group($license, 'bandwidth')->currentUsage();
+        $bandwidth_usage = commerce_license_billing_usage_group($license, 'bandwidth')->currentUsage($this->billing_cycle);
         if ($bandwidth_usage != 0) {
           $bandwidth_usage_reset = FALSE;
         }

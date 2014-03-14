@@ -21,34 +21,38 @@ interface CommerceLicenseBillingUsageGroupInterface {
   public function addUsage($revisionId, $quantity, $start, $end);
 
   /**
-   * Returns the current usage quantity.
-   */
-  public function currentUsage();
-
-  /**
-   * Returns the usage history for the current billing cycle.
+   * Returns the usage quantity for the provided / current billing cycle.
    *
    * @param $billing_cycle
-   *   The billing cycle entity.
+   *   The billing cycle for which usage should be returned.
+   *   If not provided, the current billing cycle is assumed.
+   */
+  public function currentUsage($billingCycle = NULL);
+
+  /**
+   * Returns the usage history for the provided billing cycle.
+   *
+   * @param $billing_cycle
+   *   The billing cycle.
    */
   public function usageHistory(CommerceLicenseBillingCycle $billingCycle);
 
   /**
-   * Returns the chargeable usage records for the current billing cycle.
+   * Returns the chargeable usage records for the provided billing cycle.
    *
    * @param $billing_cycle
-   *   The billing cycle entity.
+   *   The billing cycle.
    */
   public function chargeableUsage(CommerceLicenseBillingCycle $billingCycle);
 
   /**
-   * Returns whether all usage has been reported for the current billing cycle.
+   * Returns whether all usage has been reported for the provided billing cycle.
    *
    * @param $billing_cycle
-   *   The active billing cycle.
+   *   The billing cycle.
    *
    * @return
-   *   TRUE if all usage has been reported for each plan in the current
+   *   TRUE if all usage has been reported for each plan in the provided
    *   billing cycle, FALSE otherwise.
    */
   public function isComplete(CommerceLicenseBillingCycle $billingCycle);
