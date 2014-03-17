@@ -241,7 +241,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $has_scheduled_change = FALSE;
     if (count($scheduled_changes) == 1) {
       $scheduled_change = reset($scheduled_changes);
-      if ($scheduled_change['property'] == 'product_id' && $scheduled_change['value'] == $plan_b_product_id) {
+      if ($scheduled_change['property'] == 'product' && $scheduled_change['value'] == $plan_b_product_id) {
         $has_scheduled_change = TRUE;
       }
     }
