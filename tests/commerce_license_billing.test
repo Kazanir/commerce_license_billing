@@ -400,6 +400,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
    * Tests the closing of a billing cycle.
    */
   protected function billingCycleCloseTest() {
+    commerce_license_set_time($this->billing_cycle->end);
     // Call the queue item manually.
     $item = new stdClass;
     $item->data = array();
@@ -462,6 +463,34 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       $this->assertTrue($licenses_renewed, 'The licenses have been successfully renewed');
       $this->assertTrue($bandwidth_usage_reset, 'The bandwidth usage has been successfully reset.');
     }
+
+    // Go to the end of the second billing cycle, cancel all licenses.
+    commerce_license_set_time($new_billing_cycle->end + 1);
+    foreach ($licenses as $license) {
+      $license->status = COMMERCE_LICENSE_REVOKED;
+      $license->save();
+    }
+    $bandwidth = commerce_license_billing_usage_group($this->prepaid_license, 'bandwidth');
+    $bandwidth->addUsage($this->prepaid_license->revision_id, 0, $new_billing_cycle->start, $new_billing_cycle->end);
+    $bandwidth = commerce_license_billing_usage_group($this->postpaid_license, 'bandwidth');
+    $bandwidth->addUsage($this->postpaid_license->revision_id, 0, $new_billing_cycle->start, $new_billing_cycle->end);
+
+    // Close the second biling cycle.
+    $item = new stdClass;
+    $item->data = array();
+    $item->data['billing_cycle_id'] = $new_billing_cycle->billing_cycle_id;
+    commerce_license_billing_cycle_expiration_queue_process($item);
+    $recurring_order = $this->getBillingCycleOrder($new_billing_cycle);
+    $new_billing_cycle = entity_load_single('cl_billing_cycle', $new_billing_cycle->billing_cycle_id);
+
+    // Confirm that no new billing cycle was opened.
+    $expected_start = $new_billing_cycle->end + 1;
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'cl_billing_cycle')
+      ->propertyCondition('start', $expected_start);
+    $result = $query->execute();
+    $this->assertFalse($result, 'A new billing cycle was not opened');
   }
 
   /**

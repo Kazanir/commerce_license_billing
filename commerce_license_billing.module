@@ -286,24 +286,33 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
     // Close the billing cycle.
     $billing_cycle->status = 0;
     $billing_cycle->save();
+    // Clean-up usage.
+    $license_ids = array_keys($licenses);
+    commerce_license_billing_usage_history_clear($license_ids, $billing_cycle);
     // Close the order.
     $order->status = 'recurring_payment_pending';
     commerce_order_save($order);
 
-    // Open a new billing cycle just after the end of the previous one.
-    $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
-    $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle);
-    // Renew the licenses.
-    $license_ids = array();
     foreach ($licenses as $license) {
-      $license->renew($next_billing_cycle->end);
-      $license_ids[] = $license->license_id;
+      // Filter out non-active (revoked / expired) licenses, only the active
+      // ones can be charged in the next billing cycle.
+      if ($license->status != COMMERCE_LICENSE_ACTIVE) {
+        unset($licenses[$license->license_id]);
+        continue;
+      }
     }
-    // Clear all closed usage, it's now irrelevant.
-    commerce_license_billing_usage_history_clear($license_ids, $billing_cycle);
 
-    // Generate a new recurring order.
-    commerce_license_billing_generate_recurring_order($order, $next_billing_cycle, $licenses);
+    if ($licenses) {
+      // Open a new billing cycle for the active licenses, and renew each one.
+      $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
+      $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle);
+      foreach ($licenses as $license) {
+        $license->renew($next_billing_cycle->end);
+      }
+
+      // Generate a new recurring order.
+      commerce_license_billing_generate_recurring_order($order, $next_billing_cycle, $licenses);
+    }
 
     return array(
       'status' => ADVANCEDQUEUE_STATUS_SUCCESS,
