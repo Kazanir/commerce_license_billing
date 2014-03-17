@@ -452,16 +452,8 @@ function commerce_license_billing_generate_recurring_order($previous_order, $bil
   $recurring_order_wrapper->commerce_customer_billing = $previous_order_wrapper->commerce_customer_billing->value();
   $recurring_order_wrapper->cl_billing_cycle = $billing_cycle;
   // Generate a base line item for each license.
-  // If this is the first recurring order, licenses of all statuses are taken,
-  // since they haven't been activated yet. However, if the previous order was
-  // also recurring, only active licenses are taken since the revoked / expired
-  // ones have already been charged for.
-  $active_only = ($previous_order->type == 'recurring');
   $line_items = array();
   foreach ($licenses as $license) {
-    if ($active_only && $license->status != COMMERCE_LICENSE_ACTIVE) {
-      continue;
-    }
     $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order->order_id);
   }
   $recurring_order_wrapper->commerce_line_items = $line_items;
