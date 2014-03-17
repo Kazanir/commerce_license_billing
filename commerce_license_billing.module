@@ -1031,6 +1031,17 @@ function commerce_license_billing_must_schedule_change($license, $property) {
   if ($license->wrapper->product->cl_billing_type->value() == 'prepaid') {
     return TRUE;
   }
+
+  // Allow usage groups to enforce scheduling, in cases where it wouldn't be
+  // possible to prorate the free quantity against reported usage.
+  if ($license instanceof CommerceLicenseBillingUsageInterface) {
+    foreach (array_keys($license->usageGroups()) as $group_name) {
+      $usage_group = commerce_license_billing_usage_group($license, $group_name);
+      if ($usage_group->enforceChangeScheduling($property)) {
+        return TRUE;
+      }
+    }
+  }
 }
 
 /**

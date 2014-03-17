@@ -6,6 +6,21 @@
 interface CommerceLicenseBillingUsageGroupInterface {
 
   /**
+   * Enforces change scheduling for the given property.
+   *
+   * This means that any change to the given property ("status", for example)
+   * must be scheduled for the end of the billing cycle, so that it doesn't
+   * interfere with billing.
+   *
+   * @param $property
+   *   The property that will be changed, usually product or status.
+   *
+   * @return
+   *   TRUE if changes to the given property must be scheduled, FALSE otherwise.
+   */
+  public function enforceChangeScheduling($property);
+
+  /**
    * Adds a usage record for the given license revision.
    *
    * @param $revisionId
@@ -106,6 +121,13 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
     $this->license = $license;
     $this->groupName = $groupName;
     $this->groupInfo = $groupInfo;
+  }
+
+  /**
+   * Implements CommerceLicenseBillingUsageGroupInterface::enforceChangeScheduling().
+   */
+  public function enforceChangeScheduling($property) {
+    return FALSE;
   }
 
   /**
