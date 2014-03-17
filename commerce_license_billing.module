@@ -294,6 +294,12 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
     commerce_order_save($order);
 
     foreach ($licenses as $license) {
+      // Apply scheduled changes.
+      $changes = commerce_license_billing_schedule_changes_list($license);
+      if ($changes) {
+        commerce_license_billing_apply_changes($license, $changes);
+      }
+
       // Filter out non-active (revoked / expired) licenses, only the active
       // ones can be charged in the next billing cycle.
       if ($license->status != COMMERCE_LICENSE_ACTIVE) {
@@ -961,10 +967,6 @@ function commerce_license_billing_commerce_license_delete($license) {
 /**
  * Changes the license plan.
  *
- * @todo
- * Allow the plan change to be queued until the end of the cycle, and do it
- * by default for prepaid cycles.
- *
  * @param $license
  *   The license entity.
  * @param $product_id
@@ -972,7 +974,7 @@ function commerce_license_billing_commerce_license_delete($license) {
  */
 function commerce_license_billing_change_plan($license, $product_id) {
   if ($license->wrapper->product->cl_billing_type->value() == 'prepaid') {
-    // We don't support changing plans for prepaid products for now.
+    commerce_license_billing_schedule_change($license, 'product_id', $product_id);
     return;
   }
 
@@ -1150,6 +1152,77 @@ function commerce_license_billing_usage_group($license, $group_name) {
   $plugin = $plugins[$group_info['type']];
 
   return new $plugin['class']($license, $group_name, $group_info);
+}
+
+/**
+ * Schedules a change of a license property for the end of the billing cycle.
+ *
+ * Usually used to schedule plan changes or license cancellations.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $property
+ *   The property that will be changed, usually product_id or status.
+ * @param $value
+ *   The new value of the property.
+ */
+function commerce_license_billing_schedule_change($license, $property, $value) {
+  db_insert('cl_scheduled_change')
+    ->fields(array(
+      'license_id' => $license->license_id,
+      'property' => $property,
+      'value' => $value,
+      'created' => REQUEST_TIME,
+    ))
+    ->execute();
+}
+
+/**
+ * Returns the license changes scheduled for the end of the billing cycle.
+ *
+ * @param $license
+ *   The license entity.
+ *
+ * @return
+ *   An array of change records with the following keys:
+ *   - property: The property that will be changed.
+ *   - value: The new value of the property.
+ *   - created: The change request creation timestamp.
+ */
+function commerce_license_billing_schedule_changes_list($license) {
+  $scheduled_changes = &drupal_static(__FUNCTION__, array());
+  if (!isset($scheduled_changes[$license->license_id])) {
+    $scheduled_changes[$license->license_id] = array();
+    $data = array(
+      ':license_id' => $license->license_id,
+    );
+    $result = db_query("SELECT * FROM {cl_scheduled_change}
+                          WHERE license_id = :license_id
+                            ORDER BY created ASC", $data);
+    $scheduled_changes[$license->license_id] = $result->fetchAll(PDO::FETCH_ASSOC);
+  }
+
+  return $scheduled_changes[$license->license_id];
+}
+
+/**
+ * Applies the provided changes to the provided license.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $changes
+ *   An array of change records.
+ */
+function commerce_license_billing_apply_changes($license, $changes) {
+  // Apply each change to the license.
+  foreach ($changes as $change) {
+    $license->wrapper->{$change['property']} = $change['value'];
+  }
+  // Save the license and trigger a synchronization if needed.
+  $license->save();
+  if ($license instanceof CommerceLicenseSynchronizableInterface) {
+    commerce_license_enqueue_sync($license);
+  }
 }
 
 /**

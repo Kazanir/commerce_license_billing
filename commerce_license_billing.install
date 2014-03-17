@@ -102,7 +102,7 @@ function commerce_license_billing_schema() {
     'primary key' => array('billing_cycle_type_id'),
   );
   $schema['cl_billing_usage'] = array(
-    'description' => 'The base table for tracking license usage.',
+    'description' => 'Tracks license usage.',
     'fields' => array(
       'usage_id' => array(
         'description' => 'The primary key.',
@@ -150,6 +150,44 @@ function commerce_license_billing_schema() {
     ),
     'primary key' => array('usage_id'),
   );
+  $schema['cl_scheduled_change'] = array(
+    'description' => 'Tracks license changes scheduled for the end of the billing cycle.',
+    'fields' => array(
+      'change_id' => array(
+        'description' => 'The primary key.',
+        'type' => 'serial',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+      ),
+      'license_id' => array(
+        'description' => 'The id of the license.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'property' => array(
+        'description' => 'The property that will be changed, usually product_id or status.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'value' => array(
+        'description' => 'The new value of the property.',
+        'type' => 'varchar',
+        'length' => 255,
+        'not null' => TRUE,
+        'default' => '',
+      ),
+      'created' => array(
+        'description' => 'The Unix timestamp when the change was scheduled.',
+        'type' => 'int',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('change_id'),
+  );
 
   return $schema;
 }
@@ -174,4 +212,12 @@ function commerce_license_billing_uninstall() {
   field_attach_delete_bundle('cl_billing_cycle_type', 'periodic');
   field_attach_delete_bundle('commerce_line_item', 'recurring');
   field_attach_delete_bundle('commerce_order', 'recurring');
+}
+
+/**
+ * Creates the 'cl_scheduled_change' table.
+ */
+function commerce_license_billing_update_7100() {
+  $schema = commerce_license_billing_schema();
+  db_create_table('cl_scheduled_change', $schema['cl_scheduled_change']);
 }

@@ -15,9 +15,10 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   protected $billing_cycle_type = NULL;
   protected $billing_cycle = NULL;
   protected $prepaid_product = NULL;
+  protected $another_prepaid_product = NULL;
   protected $prepaid_product_display = NULL;
   protected $postpaid_product = NULL;
-  protected $alternative_postpaid_product = NULL;
+  protected $another_postpaid_product = NULL;
   protected $postpaid_product_display = NULL;
   protected $prepaid_license = NULL;
   protected $postpaid_license = NULL;
@@ -56,7 +57,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $this->billing_cycle = $billing_cycle_type->getBillingCycle($this->store_customer->uid);
 
     // Create a prepaid product that holds the license.
-    $this->prepaid_product = $this->createProduct('PREPAID-LICENSE', 50, 'prepaid');
+    $this->prepaid_product = $this->createProduct('PREPAID-LICENSE-PLAN-A', 50, 'prepaid');
     // Create a product display for the prepaid product.
     $node = (object) array('type' => 'product_display');
     node_object_prepare($node);
@@ -77,7 +78,8 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     node_save($node);
     $this->postpaid_product_display = $node;
 
-    // Create another postpaid product that serves as an alternative plan.
+    // Create two more products to serve as alternative plans.
+    $this->another_prepaid_product = $this->createProduct('PREPAID-LICENSE-PLAN-B', 50, 'prepaid');
     $this->another_postpaid_product = $this->createProduct('POSTPAID-LICENSE-PLAN-B', 80, 'postpaid');
 
     $this->start = time();
@@ -211,7 +213,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   public function planTest() {
     // Forward time to the expected start of plan B.
     commerce_license_set_time($this->plan_durations[1][0]);
-    // Switch from plan A to plan B.
+    // Switch the postpaid license from plan A to plan B.
     $plan_b_product_id = $this->another_postpaid_product->product_id;
     commerce_license_billing_change_plan($this->postpaid_license, $plan_b_product_id);
     $plan_history = commerce_license_billing_plan_history_list($this->postpaid_license, $this->billing_cycle);
@@ -231,6 +233,19 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $this->assertTrue($second_record_valid, 'The second plan history record is valid');
     $first_record_closed = ($plan_history[0]['end'] + 1 == $plan_history[1]['start']);
     $this->assertTrue($first_record_closed, 'The first plan history record was successfuly closed');
+
+    // Schedule a plan change for the prepaid license.
+    $plan_b_product_id = $this->another_prepaid_product->product_id;
+    commerce_license_billing_change_plan($this->prepaid_license, $plan_b_product_id);
+    $scheduled_changes = commerce_license_billing_schedule_changes_list($this->prepaid_license);
+    $has_scheduled_change = FALSE;
+    if (count($scheduled_changes) == 1) {
+      $scheduled_change = reset($scheduled_changes);
+      if ($scheduled_change['property'] == 'product_id' && $scheduled_change['value'] == $plan_b_product_id) {
+        $has_scheduled_change = TRUE;
+      }
+    }
+    $this->assertTrue($has_scheduled_change, "The plan change for the prepaid license was successfuly scheduled.");
   }
 
   /**
@@ -462,6 +477,11 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       }
       $this->assertTrue($licenses_renewed, 'The licenses have been successfully renewed');
       $this->assertTrue($bandwidth_usage_reset, 'The bandwidth usage has been successfully reset.');
+
+      // Reload the prepaid license and confirm the plan change.
+      $this->prepaid_license = entity_load_single('commerce_license', $this->prepaid_license->license_id);
+      $changed_plan = ($this->prepaid_license->product_id == $this->another_prepaid_product->product_id);
+      $this->assertTrue($changed_plan, "The scheduled plan change for the prepaid license has been executed.");
     }
 
     // Go to the end of the second billing cycle, register usage.
