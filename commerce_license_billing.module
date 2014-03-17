@@ -967,6 +967,9 @@ function commerce_license_billing_commerce_license_delete($license) {
 /**
  * Changes the license plan.
  *
+ * If the license is prepaid, the plan change is scheduled for the end
+ * of the billing cycle.
+ *
  * @param $license
  *   The license entity.
  * @param $product_id
@@ -980,6 +983,31 @@ function commerce_license_billing_change_plan($license, $product_id) {
 
   // Change the plan, and trigger a synchronization.
   $license->product_id = $product_id;
+  $license->save();
+  if ($license instanceof CommerceLicenseSynchronizableInterface) {
+    commerce_license_enqueue_sync($license);
+  }
+}
+
+/**
+ * Changes the license status.
+ *
+ * If the license is prepaid, the status change is scheduled for the end
+ * of the billing cycle.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $status
+ *   The new status.
+ */
+function commerce_license_billing_change_status($license, $status) {
+  if ($license->wrapper->product->cl_billing_type->value() == 'prepaid') {
+    commerce_license_billing_schedule_change($license, 'status', $status);
+    return;
+  }
+
+  // Change the status, and trigger a synchronization.
+  $license->status = $status;
   $license->save();
   if ($license instanceof CommerceLicenseSynchronizableInterface) {
     commerce_license_enqueue_sync($license);
