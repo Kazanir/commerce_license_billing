@@ -464,16 +464,18 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       $this->assertTrue($bandwidth_usage_reset, 'The bandwidth usage has been successfully reset.');
     }
 
-    // Go to the end of the second billing cycle, cancel all licenses.
+    // Go to the end of the second billing cycle, register usage.
     commerce_license_set_time($new_billing_cycle->end + 1);
-    foreach ($licenses as $license) {
-      $license->status = COMMERCE_LICENSE_REVOKED;
-      $license->save();
-    }
     $bandwidth = commerce_license_billing_usage_group($this->prepaid_license, 'bandwidth');
     $bandwidth->addUsage($this->prepaid_license->revision_id, 0, $new_billing_cycle->start, $new_billing_cycle->end);
     $bandwidth = commerce_license_billing_usage_group($this->postpaid_license, 'bandwidth');
     $bandwidth->addUsage($this->postpaid_license->revision_id, 0, $new_billing_cycle->start, $new_billing_cycle->end);
+
+    // Cancel all licenses.
+    foreach ($licenses as $license) {
+      $license->status = COMMERCE_LICENSE_REVOKED;
+      $license->save();
+    }
 
     // Close the second biling cycle.
     $item = new stdClass;
