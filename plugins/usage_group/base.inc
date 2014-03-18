@@ -6,14 +6,14 @@
 interface CommerceLicenseBillingUsageGroupInterface {
 
   /**
-   * Enforces change scheduling for the given property.
+   * Enforces change scheduling for the given license property.
    *
    * This means that any change to the given property ("status", for example)
    * must be scheduled for the end of the billing cycle, so that it doesn't
    * interfere with billing.
    *
    * @param $property
-   *   The property that will be changed, usually product or status.
+   *   The license property that will be changed, usually "product" or "status".
    *
    * @return
    *   TRUE if changes to the given property must be scheduled, FALSE otherwise.

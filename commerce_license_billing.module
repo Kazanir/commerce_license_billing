@@ -1042,6 +1042,12 @@ function commerce_license_billing_must_schedule_change($license, $property) {
       }
     }
   }
+
+  // Consult per-product settings.
+  $schedule_changes = $license->wrapper->product->cl_schedule_changes->value();
+  if (in_array($property, $schedule_changes)) {
+    return TRUE;
+  }
 }
 
 /**
@@ -1404,6 +1410,63 @@ function commerce_license_billing_configure_product_types($types) {
     $instance = field_info_instance('commerce_product', 'cl_billing_type', $removed_bundle);
     field_delete_instance($instance, TRUE);
   }
+
+  $field = field_info_field('cl_schedule_changes');
+  if (empty($field)) {
+    $field = array(
+      'field_name' => 'cl_schedule_changes',
+      'type' => 'list_text',
+      'entity_type' => 'commerce_product',
+      'cardinality' => -1,
+      'translatable' => 0,
+      'module' => 'list',
+      'locked' => TRUE,
+      'settings' => array(
+        'allowed_values_function' => 'commerce_license_billing_allowed_schedule_values',
+      ),
+    );
+    field_create_field($field);
+  }
+
+  $existing = array();
+  if (!empty($field['bundles']['commerce_product'])) {
+    $existing = $field['bundles']['commerce_product'];
+  }
+  // Create instances on newly configured product types.
+  foreach (array_diff($types, $existing) as $new_bundle) {
+    $instance = field_info_instance('commerce_product', 'cl_schedule_changes', $new_bundle);
+    if (empty($instance)) {
+      $duration_instance = field_info_instance('commerce_product', 'commerce_license_duration', $new_bundle);
+      $instance = array(
+        'field_name' => 'cl_schedule_changes',
+        'entity_type' => 'commerce_product',
+        'bundle' => $new_bundle,
+        'label' => 'Postpone license changes',
+        'required' => FALSE,
+        'widget' => array(
+          'type' => 'options_buttons',
+          'module' => 'options',
+          'weight' => $duration_instance['widget']['weight'] + 3,
+        ),
+      );
+      field_create_instance($instance);
+    }
+  }
+  // Remove instances from product types that can no longer have licenses.
+  foreach (array_diff($existing, $types) as $removed_bundle) {
+    $instance = field_info_instance('commerce_product', 'cl_schedule_changes', $removed_bundle);
+    field_delete_instance($instance, TRUE);
+  }
+}
+
+/**
+ * Allowed values callback for the cl_schedule_changes field.
+ */
+function commerce_license_billing_allowed_schedule_values($field, $instance, $entity_type, $entity) {
+  return array(
+    'product' => 'Postpone plan changes to the end of the billing cycle.',
+    'status' => 'Postpone status changes to the end of the billing cycle.',
+  );
 }
 
 /**
@@ -1555,10 +1618,11 @@ function commerce_license_billing_configure_order_type() {
  * Implements hook_field_widget_form_alter().
  */
 function commerce_license_billing_field_widget_form_alter(&$element, &$form_state, $context) {
-  if ($context['field']['field_name'] == 'cl_billing_type') {
-    // Build the path to the cl_billing_cycle_type widget, taking into account
-    // all field parents. This ensures that #states work for embedded forms
-    // such as the IEF one.
+  // Hide the fields if no billing cycle type was selected.
+  $fields = array('cl_billing_type', 'cl_schedule_changes');
+  if (in_array($context['field']['field_name'], $fields)) {
+    // Build the path to the widget, taking into account all field parents.
+    // This ensures that #states work for embedded forms such as the IEF one.
     $parents = $element['#field_parents'];
     $parents[] = 'cl_billing_cycle_type';
     $parents[] = $element['#language'];
@@ -1572,8 +1636,28 @@ function commerce_license_billing_field_widget_form_alter(&$element, &$form_stat
       }
     }
 
-    $element['#states']['invisible'] = array(
-      ':input[name="' . $name . '"]' => array('value' => '_none'),
+    $element['#states']['visible'] = array(
+      ':input[name="' . $name . '"]' => array('!value' => '_none'),
+    );
+  }
+
+  // Hide the cl_schedule_changes field if cl_billing_type is 'prepaid'.
+  if ($context['field']['field_name'] == 'cl_schedule_changes') {
+    $parents = $element['#field_parents'];
+    $parents[] = 'cl_billing_type';
+    $parents[] = $element['#language'];
+    $name = '';
+    foreach ($parents as $name_part) {
+      if (empty($name)) {
+        $name = $name_part;
+      }
+      else {
+        $name .= '[' . $name_part . ']';
+      }
+    }
+
+    $element['#states']['visible'] += array(
+      ':input[name="' . $name . '"]' => array('!value' => 'prepaid'),
     );
   }
 }
