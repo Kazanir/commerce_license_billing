@@ -222,10 +222,21 @@ function commerce_license_billing_cron() {
   if (!empty($results['cl_billing_cycle'])) {
     $billing_cycle_ids = array_keys($results['cl_billing_cycle']);
     foreach (array_keys($results['cl_billing_cycle']) as $billing_cycle_id) {
-      $queue = DrupalQueue::get('commerce_license_billing_cycle_expiration');
+      // A new billing cycle and order are created right away, and the licenses
+      // are renewed.
+      $renew_queue = DrupalQueue::get('commerce_license_billing_cycle_renew');
       $task = array(
         'billing_cycle_id' => $billing_cycle_id,
-        'title' => 'Billing cycle #' . $billing_cycle_id,
+        'title' => 'Renew billing cycle #' . $billing_cycle_id,
+      );
+      $queue->createItem($task);
+
+      // The expired billing cycle might be closed right away, or days later,
+      // depending on the completeness of usage records.
+      $close_queue = DrupalQueue::get('commerce_license_billing_cycle_close');
+      $task = array(
+        'billing_cycle_id' => $billing_cycle_id,
+        'title' => 'Close billing cycle #' . $billing_cycle_id,
       );
       $queue->createItem($task);
     }
@@ -237,8 +248,11 @@ function commerce_license_billing_cron() {
  */
 function commerce_license_billing_advanced_queue_info() {
   return array(
-    'commerce_license_billing_cycle_expiration' => array(
-      'worker callback' => 'commerce_license_billing_cycle_expiration_queue_process',
+    'commerce_license_billing_cycle_renew' => array(
+      'worker callback' => 'commerce_license_billing_cycle_renew_queue_process',
+    ),
+    'commerce_license_billing_cycle_close' => array(
+      'worker callback' => 'commerce_license_billing_cycle_close_queue_process',
       'retry after' => 86400,
       'max attempts' => 5,
     ),
@@ -246,9 +260,9 @@ function commerce_license_billing_advanced_queue_info() {
 }
 
 /**
- * Worker callback for expiring billing cycles.
+ * Worker callback for renewing expired billing cycles.
  */
-function commerce_license_billing_cycle_expiration_queue_process($item) {
+function commerce_license_billing_cycle_renew_queue_process($item) {
   $billing_cycle_id = $item->data['billing_cycle_id'];
   $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
 
@@ -256,7 +270,6 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
   $query = new EntityFieldQuery;
   $query
     ->entityCondition('entity_type', 'commerce_order')
-    ->propertyCondition('status', array('recurring_open', 'recurring_usage_pending'))
     ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle_id);
   $result = $query->execute();
   if (!$result) {
@@ -265,9 +278,67 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
   }
   $order_id = key($result['commerce_order']);
   $order = commerce_order_load($order_id);
+  $licenses = commerce_license_billing_get_recurring_order_licenses($order);
+
+  foreach ($licenses as $license) {
+    // Apply scheduled changes.
+    $changes = commerce_license_billing_schedule_changes_list($license);
+    if ($changes) {
+      commerce_license_billing_apply_changes($license, $changes);
+    }
+
+    // Filter out non-active (revoked / expired) licenses, only the active
+    // ones can be charged in the next billing cycle.
+    if ($license->status != COMMERCE_LICENSE_ACTIVE) {
+      unset($licenses[$license->license_id]);
+      continue;
+    }
+  }
+
+  if ($licenses) {
+    $result = 'Opened a new billing cycle.';
+    // Open a new billing cycle for the active licenses, and renew each one.
+    $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
+    $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle);
+    foreach ($licenses as $license) {
+      $license->renew($next_billing_cycle->end);
+    }
+
+    // Generate a new recurring order.
+    commerce_license_billing_generate_recurring_order($order, $next_billing_cycle, $licenses);
+  }
+  else {
+    $result = 'All licenses are now inactive, no new billing cycle is needed.';
+  }
+
+  return array(
+    'status' => ADVANCEDQUEUE_STATUS_SUCCESS,
+    'result' => $result,
+  );
+}
+
+/**
+ * Worker callback for closing expired billing cycles.
+ */
+function commerce_license_billing_cycle_close_queue_process($item) {
+  $billing_cycle_id = $item->data['billing_cycle_id'];
+  $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
+
+  // Load the order for this billing cycle.
+  $query = new EntityFieldQuery;
+  $query
+    ->entityCondition('entity_type', 'commerce_order')
+    ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle_id);
+  $result = $query->execute();
+  if (!$result) {
+    // No order found (which should never happen), so nothing else to be done.
+    return;
+  }
+  $order_id = key($result['commerce_order']);
+  $order = commerce_order_load($order_id);
+  $licenses = commerce_license_billing_get_recurring_order_licenses($order);
 
   // Gather licenses.
-  $licenses = commerce_license_billing_get_recurring_order_licenses($order);
   $can_close = TRUE;
   foreach ($licenses as $license) {
     if ($license instanceof CommerceLicenseBillingUsageInterface) {
@@ -292,33 +363,6 @@ function commerce_license_billing_cycle_expiration_queue_process($item) {
     // Close the order.
     $order->status = 'recurring_payment_pending';
     commerce_order_save($order);
-
-    foreach ($licenses as $license) {
-      // Apply scheduled changes.
-      $changes = commerce_license_billing_schedule_changes_list($license);
-      if ($changes) {
-        commerce_license_billing_apply_changes($license, $changes);
-      }
-
-      // Filter out non-active (revoked / expired) licenses, only the active
-      // ones can be charged in the next billing cycle.
-      if ($license->status != COMMERCE_LICENSE_ACTIVE) {
-        unset($licenses[$license->license_id]);
-        continue;
-      }
-    }
-
-    if ($licenses) {
-      // Open a new billing cycle for the active licenses, and renew each one.
-      $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
-      $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle);
-      foreach ($licenses as $license) {
-        $license->renew($next_billing_cycle->end);
-      }
-
-      // Generate a new recurring order.
-      commerce_license_billing_generate_recurring_order($order, $next_billing_cycle, $licenses);
-    }
 
     return array(
       'status' => ADVANCEDQUEUE_STATUS_SUCCESS,

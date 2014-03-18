@@ -420,7 +420,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $item = new stdClass;
     $item->data = array();
     $item->data['billing_cycle_id'] = $this->billing_cycle->billing_cycle_id;
-    commerce_license_billing_cycle_expiration_queue_process($item);
+    commerce_license_billing_cycle_close_queue_process($item);
 
     // The order hasn't been closed because of missing usage reports.
     $recurring_order = $this->getBillingCycleOrder($this->billing_cycle);
@@ -436,15 +436,16 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
 
     // Retrigger the close, reload the order and re-examine it.
     entity_get_controller('commerce_order')->resetCache();
-    commerce_license_billing_cycle_expiration_queue_process($item);
-
-    $recurring_order = commerce_order_load($recurring_order->order_id);
-    $payment_pending = ($recurring_order->status == 'recurring_payment_pending');
-    $this->assertTrue($payment_pending, 'The order is now awaiting payment, as expected.');
+    commerce_license_billing_cycle_close_queue_process($item);
 
     $this->billing_cycle = entity_load_single('cl_billing_cycle', $this->billing_cycle->billing_cycle_id);
     $billing_cycle_closed = ($this->billing_cycle->status == 0);
     $this->assertTrue($billing_cycle_closed, 'The previous billing cycle was successfully closed');
+    $recurring_order = commerce_order_load($recurring_order->order_id);
+    $payment_pending = ($recurring_order->status == 'recurring_payment_pending');
+    $this->assertTrue($payment_pending, 'The order is now awaiting payment, as expected.');
+
+    commerce_license_billing_cycle_renew_queue_process($item);
     $expected_start = $this->billing_cycle->end + 1;
     // Try to find the new billing cycle.
     $query = new EntityFieldQuery;
@@ -457,10 +458,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       $billing_cycle_id = key($result['cl_billing_cycle']);
       $new_billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
       $new_recurring_order = $this->getBillingCycleOrder($new_billing_cycle);
-      $opened_new_order = FALSE;
-      if ($new_recurring_order && $new_recurring_order->status == 'recurring_open') {
-        $opened_new_order = TRUE;
-      }
+      $opened_new_order = ($new_recurring_order && $new_recurring_order->status == 'recurring_open');
       $this->assertTrue($opened_new_order, 'A new recurring order was successfuly opened');
 
       $licenses = commerce_license_billing_get_recurring_order_licenses($new_recurring_order);
@@ -501,10 +499,10 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $item = new stdClass;
     $item->data = array();
     $item->data['billing_cycle_id'] = $new_billing_cycle->billing_cycle_id;
-    commerce_license_billing_cycle_expiration_queue_process($item);
-    $recurring_order = $this->getBillingCycleOrder($new_billing_cycle);
-    $new_billing_cycle = entity_load_single('cl_billing_cycle', $new_billing_cycle->billing_cycle_id);
+    commerce_license_billing_cycle_renew_queue_process($item);
+    commerce_license_billing_cycle_close_queue_process($item);
 
+    $new_billing_cycle = entity_load_single('cl_billing_cycle', $new_billing_cycle->billing_cycle_id);
     // Confirm that no new billing cycle was opened.
     $expected_start = $new_billing_cycle->end + 1;
     $query = new EntityFieldQuery;
