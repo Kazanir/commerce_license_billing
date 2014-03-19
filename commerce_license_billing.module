@@ -229,7 +229,7 @@ function commerce_license_billing_cron() {
         'billing_cycle_id' => $billing_cycle_id,
         'title' => 'Renew billing cycle #' . $billing_cycle_id,
       );
-      $queue->createItem($task);
+      $renew_queue->createItem($task);
 
       // The expired billing cycle might be closed right away, or days later,
       // depending on the completeness of usage records.
@@ -238,7 +238,7 @@ function commerce_license_billing_cron() {
         'billing_cycle_id' => $billing_cycle_id,
         'title' => 'Close billing cycle #' . $billing_cycle_id,
       );
-      $queue->createItem($task);
+      $close_queue->createItem($task);
     }
   }
 }
