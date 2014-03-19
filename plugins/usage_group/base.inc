@@ -200,7 +200,10 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
    *   The billing cycle entity.
    *
    * @return
-   *   An array of free quantity amounts, keyed by the plan's revision_id.
+   *   An array of arrays keyed by revision id, with the keys:
+   *   - quantity: The free quantity for this plan.
+   *   - start: The start timestamp of the plan.
+   *   - end: The end timestamp of the plan.
    */
   protected function freeQuantities(CommerceLicenseBillingCycle $billingCycle) {
     $free_quantities = array();
@@ -208,7 +211,11 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
     foreach ($plan_history as $history_record) {
       $revision_usage_groups = $history_record['revision']->usageGroups();
       $revision_group_info = $revision_usage_groups[$this->groupName];
-      $free_quantities[$history_record['revision_id']] = $revision_group_info['free_quantity'];
+      $free_quantities[$history_record['revision_id']] = array(
+        'quantity' => $revision_group_info['free_quantity'],
+        'start' => $history_record['start'],
+        'end' => $history_record['end'],
+      );
     }
 
     return $free_quantities;

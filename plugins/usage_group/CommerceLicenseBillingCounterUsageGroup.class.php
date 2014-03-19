@@ -39,6 +39,7 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
     $chargeable_usage = array();
     $usage = $this->usageHistory($billingCycle);
     $free_quantities = $this->freeQuantities($billingCycle);
+    $billing_cycle_duration = $billingCycle->end - $billingCycle->start;
 
     // There could be multiple records per revision, so group them first.
     $counter_totals = array();
@@ -54,9 +55,16 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
     // create the final total that has only the non-free quantities.
     $total = 0;
     foreach ($counter_totals as $revision_id => $quantity) {
+      // Prorate the free quantity. So if the free quantity is "10", but
+      // the plan only spanned half of the billing cycle, the actual
+      // free quantity will be "5".
       $free_quantity = $free_quantities[$revision_id];
-      if ($quantity > $free_quantity) {
-        $total += ($quantity - $free_quantity);
+      $free_quantity_duration = ($free_quantity['end'] - $free_quantity['start']);
+      $free_quantity_amount =  $free_quantity['quantity'] * ($free_quantity_duration / $billing_cycle_duration);
+      $free_quantity_amount = round($free_quantity_amount);
+
+      if ($quantity > $free_quantity_amount) {
+        $total += ($quantity - $free_quantity_amount);
       }
     }
 

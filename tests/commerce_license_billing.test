@@ -267,6 +267,13 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $current_usage = $bandwidth->currentUsage($this->billing_cycle);
     $this->assertEqual($current_usage, 3072, 'Current bandwidth usage matches total reported quantity');
 
+    // Set initial bandwidth usage for the postpaid license, so that it shows
+    // up as a line item in orderRefreshTest().
+    $plan_history = commerce_license_billing_plan_history_list($this->postpaid_license, $this->billing_cycle);
+    $bandwidth = commerce_license_billing_usage_group($this->postpaid_license, 'bandwidth');
+    debug(date('Y-m-d H:i:s', $first_usage_end));
+    $bandwidth->addUsage($plan_history[0]['revision_id'], 2050, $first_usage_start, $first_usage_end);
+
     // Forward time to expected start of plan B.
     commerce_license_set_time($this->plan_durations[1][0]);
 
@@ -295,7 +302,6 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     // Build an array of expected line items.
     $next_billing_cycle = $this->billing_cycle_type->getNextBillingCycle($this->billing_cycle);
     $expected_line_items = array();
-    // The prepaid product.
     $expected_line_items[] = array(
       'title' => 'prepaid base product',
       'product_id' => $this->prepaid_product->product_id,
@@ -304,10 +310,9 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       'start' => $next_billing_cycle->start,
       'end' => $next_billing_cycle->end,
     );
-    // The counter usage.
     $counter_product = commerce_product_load_by_sku('BILLING-TEST-BANDWIDTH');
     $expected_line_items[] = array(
-      'title' => 'counter usage product',
+      'title' => 'bandwidth usage product (prepaid)',
       'product_id' => $counter_product->product_id,
       'unit_price' => $counter_product->commerce_price[LANGUAGE_NONE][0]['amount'],
       // 1024 is free, the rest is charged for.
@@ -315,7 +320,6 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       'start' => $this->billing_cycle->start,
       'end' => $this->billing_cycle->end,
     );
-    // The plans of the postpaid product.
     $expected_line_items[] = array(
       'title' => 'postpaid base product (plan A)',
       'product_id' => $this->postpaid_product->product_id,
@@ -333,11 +337,21 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       'start' => $plan_durations[1][0],
       'end' => $this->billing_cycle->end,
     );
+    $expected_line_items[] = array(
+      'title' => 'bandwidth usage product (postpaid)',
+      'product_id' => $counter_product->product_id,
+      'unit_price' => $counter_product->commerce_price[LANGUAGE_NONE][0]['amount'],
+      // The free quantity is 1024, prorated to 256 since this usage only
+      // covers a quarter of the billing cycle. 2050 - 256 = 1794.
+      'quantity' => 1794,
+      'start' => $this->billing_cycle->start,
+      'end' => $this->billing_cycle->end,
+    );
     $env_product = commerce_product_load_by_sku('BILLING-TEST-ENV');
     // 7.50$ is the expected unit price because at this moment the environment
     // usage is valid for 3/4 of the cycle, so it's 10$ * (3/4).
     $expected_line_items[] = array(
-      'title' => 'environments usage product for plan B',
+      'title' => 'environments usage product (postpaid, plan B)',
       'product_id' => $env_product->product_id,
       'unit_price' => '750', // 7.50$
       'quantity' => 4,
@@ -375,8 +389,9 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     // so the expected price needs to change.
     $expected_line_items[3]['end'] = $plan_durations[1][1];
     $expected_line_items[3]['unit_price'] = '4000'; // 40$.
-    // Remove the old env usage, it will be readded.
+    // Remove the old usage, it will be readded.
     unset($expected_line_items[4]);
+    unset($expected_line_items[5]);
     // Add the new active plan.
     $expected_line_items[] = array(
       'title' => 'postpaid base product (plan B)',
@@ -387,7 +402,17 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       'end' => $this->billing_cycle->end,
     );
     $expected_line_items[] = array(
-      'title' => 'environments usage product (plan B)',
+      'title' => 'bandwidth usage product (postpaid)',
+      'product_id' => $counter_product->product_id,
+      'unit_price' => $counter_product->commerce_price[LANGUAGE_NONE][0]['amount'],
+      // The free quantity is 1024, prorated to 256 since this usage only
+      // covers a quarter of the billing cycle. 2050 - 256 = 1794.
+      'quantity' => 1794,
+      'start' => $this->billing_cycle->start,
+      'end' => $this->billing_cycle->end,
+    );
+    $expected_line_items[] = array(
+      'title' => 'environments usage product (postpaid, plan B)',
       'product_id' => $env_product->product_id,
       'unit_price' => '500', // 5$
       'quantity' => 4,
@@ -395,7 +420,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       'end' => $plan_durations[1][1],
     );
     $expected_line_items[] = array(
-      'title' => 'environments usage product (plan B, reactivated)',
+      'title' => 'environments usage product (postpaid, plan B, reactivated)',
       'product_id' => $env_product->product_id,
       'unit_price' => '125', // 1.25$
       'quantity' => 4,
@@ -430,7 +455,6 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     // Add missing badwidth usage for the postpaid license.
     $plan_history = commerce_license_billing_plan_history_list($this->postpaid_license, $this->billing_cycle);
     $bandwidth = commerce_license_billing_usage_group($this->postpaid_license, 'bandwidth');
-    $bandwidth->addUsage($plan_history[0]['revision_id'], 2050, $plan_history[0]['start'], $plan_history[0]['end']);
     $bandwidth->addUsage($plan_history[1]['revision_id'], 1022, $plan_history[1]['start'], $plan_history[1]['end']);
     $bandwidth->addUsage($plan_history[2]['revision_id'], 0, $plan_history[2]['start'], $plan_history[2]['end']);
 
