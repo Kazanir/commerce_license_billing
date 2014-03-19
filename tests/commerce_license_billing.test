@@ -656,17 +656,24 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   protected function assertLineItems($order, $expected_line_items) {
     $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
     foreach ($expected_line_items as $index => $expected_line_item) {
-      $match = FALSE;
+      $match_found = FALSE;
       if (isset($order_wrapper->commerce_line_items[$index])) {
         $wrapper = $order_wrapper->commerce_line_items[$index];
-        $product_matches = ($wrapper->commerce_product->raw() == $expected_line_item['product_id']);
-        $price_matches = ($wrapper->commerce_unit_price->amount->value() == $expected_line_item['unit_price']);
-        $quantity_matches = ($wrapper->quantity->value() == $expected_line_item['quantity']);
-        $start_matches = ($wrapper->cl_billing_start->value() == $expected_line_item['start']);
-        $end_matches = ($wrapper->cl_billing_end->value() == $expected_line_item['end']);
-        $match = ($product_matches && $price_matches && $quantity_matches && $start_matches && $end_matches);
+        $match = array();
+        $match['product'] = ($wrapper->commerce_product->raw() == $expected_line_item['product_id']);
+        $match['price'] = ($wrapper->commerce_unit_price->amount->value() == $expected_line_item['unit_price']);
+        $match['quantity'] = ($wrapper->quantity->value() == $expected_line_item['quantity']);
+        $match['start'] = ($wrapper->cl_billing_start->value() == $expected_line_item['start']);
+        $match['end'] = ($wrapper->cl_billing_end->value() == $expected_line_item['end']);
+        $matching = array_filter($match);
+        $non_matching = array_diff($match, $matching);
+        $match_found = (count($non_matching) == 0);
+        if ($non_matching) {
+          debug($non_matching, 'Non-matching');
+          debug($wrapper->value());
+        }
       }
-      $this->assertTrue($match, 'Found valid matching line item for ' . $expected_line_item['title']);
+      $this->assertTrue($match_found, 'Found valid matching line item for ' . $expected_line_item['title']);
     }
   }
 }
