@@ -1413,6 +1413,8 @@ function commerce_license_billing_field_access($op, $field, $entity_type, $entit
  * - cl_billing_cycle_type: an entityreference field pointing to the
  *   billing cycle type.
  * - cl_billing_type: an options field for selecting prepaid or postpaid.
+ * - cl_schedule_changes: a multivalue options field for enabling change
+ *   scheduling.
  *
  * @param $types
  *   An array of product type machine names.

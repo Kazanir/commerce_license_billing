@@ -204,11 +204,13 @@ function commerce_license_billing_install() {
  */
 function commerce_license_billing_uninstall() {
   variable_del('bundleswitcher__cl_billing_cycle_type');
-  // Remove the product field.
-  if (field_info_field('cl_billing_cycle_type')) {
-    field_delete_field($field_name);
-  }
 
+  // Remove the product fields.
+  field_delete_field('cl_billing_cycle_type');
+  field_delete_field('cl_billing_type');
+  field_delete_field('cl_schedule_changes');
+
+  // Remove our bundles.
   field_attach_delete_bundle('cl_billing_cycle_type', 'periodic');
   field_attach_delete_bundle('commerce_line_item', 'recurring');
   field_attach_delete_bundle('commerce_order', 'recurring');
