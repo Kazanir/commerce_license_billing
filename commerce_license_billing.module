@@ -621,44 +621,55 @@ function commerce_license_billing_order_refresh($order) {
   foreach ($licenses as $license_id => $license) {
     $charges = commerce_license_billing_collect_charges($license, $billing_cycle);
     foreach ($charges as $charge) {
-      $line_item = NULL;
+      $existing_line_item = NULL;
       // Try to find an existing line item that can be updated.
       foreach ($old_line_items[$license_id] as $line_item_wrapper) {
-        // Assume we found a match, then unset it if any of the properties
-        // used for comparison ($charge['match']) don't match.
-        $line_item = $line_item_wrapper->value();
+        $match = TRUE;
         foreach ($charge['match'] as $key) {
           if ($line_item_wrapper->{$key}->value() != $charge[$key]) {
-            $line_item = NULL;
+            $match = FALSE;
+            break;
           }
+        }
+
+        if ($match) {
+          $existing_line_item = $line_item_wrapper->value();
+          break;
         }
       }
 
-      // No line item found, create one.
-      if (!$line_item) {
-        $line_item = commerce_line_item_new('recurring', $order->order_id);
-        $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-        $line_item_wrapper->line_item_label = $charge['commerce_product']->title;
-        $line_item_wrapper->commerce_product = $charge['commerce_product'];
-        $line_item_wrapper->quantity = $charge['quantity'];
-        $line_item_wrapper->cl_billing_license = $license;
+      if (!$existing_line_item) {
+        // No line item found, create one.
+        $line_item = commerce_license_billing_line_item_new($license, $charge, $order->order_id);
+        commerce_line_item_save($line_item);
+
+        $line_items[] = $line_item;
         $order_changed = TRUE;
       }
+      else {
+        // Update a copy of the line item.
+        $line_item = clone $existing_line_item;
+        commerce_license_billing_populate_line_item($line_item, $charge);
 
-      $line_item_wrapper->commerce_unit_price = $charge['commerce_unit_price'];
-      $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add(
-        $line_item_wrapper->commerce_unit_price->value(),
-          'base_price',
-          $line_item_wrapper->commerce_unit_price->value(),
-          TRUE
-      );
-      $line_item_wrapper->cl_billing_start = $charge['cl_billing_start'];
-      $line_item_wrapper->cl_billing_end = $charge['cl_billing_end'];
-      // Trigger price calculation to get any needed discounts or price changes.
-      rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
-      // Save the line item.
-      $line_item_wrapper->save();
-      $line_items[] = $line_item_wrapper->value();
+        $existing_line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $existing_line_item);
+        $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+        // Compare the price (amount, currency, components) of the previous
+        // line item with the price of the updated line item.
+        $previous_price = $existing_line_item_wrapper->commerce_unit_price;
+        $current_price = $line_item_wrapper->commerce_unit_price;
+        $data = $previous_price->data->value() + array('components' => array());
+        $current_data = $current_price->data->value() + array('components' => array());
+        $amount_changed = ($previous_price->amount->value() != $current_price->amount->value());
+        $currency_changed = ($previous_price->currency_code->value() != $current_price->currency_code->value());
+        $components_changed = ($data['components'] != $current_data['components']);
+        if ($amount_changed || $currency_changed || $components_changed) {
+          // Found a difference, save the updated line item.
+          commerce_line_item_save($line_item);
+          $order_changed = TRUE;
+        }
+
+        $line_items[] = $line_item;
+      }
     }
   }
 
@@ -667,6 +678,57 @@ function commerce_license_billing_order_refresh($order) {
     $order_wrapper->commerce_line_items = $line_items;
     $order_wrapper->save();
   }
+}
+
+/**
+ * Creates a new recurring line item populated with the charge data.
+ *
+ * @param $license
+ *   The license entity.
+ * @param $charge
+ *   The charge data.
+ * @param $order_id
+ *   The ID of the order the line item belongs to (if available).
+ *
+ * @return
+ *   The unsaved line item populated with the charge data.
+ */
+function commerce_license_billing_line_item_new($license, $charge, $order_id = 0) {
+  // Create an empty line item and set the license reference.
+  $line_item = commerce_line_item_new('recurring', $order_id);
+  $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+  $line_item_wrapper->cl_billing_license = $license;
+
+  // Populate the line item with the charge data.
+  commerce_license_billing_populate_line_item($line_item, $charge);
+
+  return $line_item;
+}
+
+/**
+ * Populates a recurring line item with the charge data.
+ *
+ * @param $line_item
+ *   The line item entity, populated by reference.
+ * @param $charge
+ *   The charge data.
+ */
+function commerce_license_billing_populate_line_item($line_item, $charge) {
+  $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+  $line_item_wrapper->line_item_label = $charge['commerce_product']->title;
+  $line_item_wrapper->commerce_product = $charge['commerce_product'];
+  $line_item_wrapper->quantity = $charge['quantity'];
+  $line_item_wrapper->commerce_unit_price = $charge['commerce_unit_price'];
+  $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add(
+    $line_item_wrapper->commerce_unit_price->value(),
+      'base_price',
+      $line_item_wrapper->commerce_unit_price->value(),
+      TRUE
+  );
+  $line_item_wrapper->cl_billing_start = $charge['cl_billing_start'];
+  $line_item_wrapper->cl_billing_end = $charge['cl_billing_end'];
+  // Trigger price calculation to get any needed discounts or price changes.
+  rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
 }
 
 /**
