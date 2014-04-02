@@ -407,6 +407,9 @@ function commerce_license_billing_get_recurring_order_licenses($order) {
     }
   }
 
+  // Remove any licenses that couldn't be loaded due to broken references.
+  $licenses = array_filter($licenses);
+
   return $licenses;
 }
 
@@ -605,7 +608,6 @@ function commerce_license_billing_order_refresh($order) {
   $billing_cycle = $order_wrapper->cl_billing_cycle->value();
   $licenses = array();
   $old_line_items = array();
-  $line_items = array();
   foreach ($order_wrapper->commerce_line_items as $delta => $line_item_wrapper) {
     // Gather all licenses that are in this order.
     $license_id = $line_item_wrapper->cl_billing_license->raw();
@@ -618,6 +620,16 @@ function commerce_license_billing_order_refresh($order) {
   }
 
   $order_changed = FALSE;
+  // Remove any licenses that couldn't be loaded due to broken references.
+  $old_license_count = count($licenses);
+  $licenses = array_filter($licenses);
+  $new_license_count = count($licenses);
+  if ($old_license_count != $new_license_count) {
+    // Resave the order to remove the line items that are no longer relevant.
+    $order_changed = TRUE;
+  }
+
+  $line_items = array();
   foreach ($licenses as $license_id => $license) {
     $charges = commerce_license_billing_collect_charges($license, $billing_cycle);
     foreach ($charges as $charge) {
