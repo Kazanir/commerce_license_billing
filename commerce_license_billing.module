@@ -265,21 +265,13 @@ function commerce_license_billing_advanced_queue_info() {
 function commerce_license_billing_cycle_renew_queue_process($item) {
   $billing_cycle_id = $item->data['billing_cycle_id'];
   $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
-
-  // Load the order for this billing cycle.
-  $query = new EntityFieldQuery;
-  $query
-    ->entityCondition('entity_type', 'commerce_order')
-    ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle_id);
-  $result = $query->execute();
-  if (!$result) {
+  $order = $billing_cycle->getOrder();
+  if (!$order) {
     // No order found (which should never happen), so nothing else to be done.
     return;
   }
-  $order_id = key($result['commerce_order']);
-  $order = commerce_order_load($order_id);
-  $licenses = commerce_license_billing_get_recurring_order_licenses($order);
 
+  $licenses = commerce_license_billing_get_recurring_order_licenses($order);
   foreach ($licenses as $license) {
     // Apply scheduled changes.
     $changes = commerce_license_billing_schedule_changes_list($license);
@@ -323,23 +315,15 @@ function commerce_license_billing_cycle_renew_queue_process($item) {
 function commerce_license_billing_cycle_close_queue_process($item) {
   $billing_cycle_id = $item->data['billing_cycle_id'];
   $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
-
-  // Load the order for this billing cycle.
-  $query = new EntityFieldQuery;
-  $query
-    ->entityCondition('entity_type', 'commerce_order')
-    ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle_id);
-  $result = $query->execute();
-  if (!$result) {
+  $order = $billing_cycle->getOrder();
+  if (!$order) {
     // No order found (which should never happen), so nothing else to be done.
     return;
   }
-  $order_id = key($result['commerce_order']);
-  $order = commerce_order_load($order_id);
-  $licenses = commerce_license_billing_get_recurring_order_licenses($order);
 
   // Gather licenses.
   $can_close = TRUE;
+  $licenses = commerce_license_billing_get_recurring_order_licenses($order);
   foreach ($licenses as $license) {
     if ($license instanceof CommerceLicenseBillingUsageInterface) {
       // Ensure each usage group has the complete usage records.
@@ -455,17 +439,8 @@ function commerce_license_billing_create_recurring_orders($order) {
     }
 
     // Check if there's an existing order attached to that billing cycle.
-    $query = new EntityFieldQuery();
-    $query
-      ->entityCondition('entity_type', 'commerce_order')
-      ->entityCondition('bundle', 'recurring')
-      ->propertyCondition('status', 'recurring_open')
-      ->propertyCondition('uid', $order->uid)
-      ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle->billing_cycle_id);
-    $results = $query->execute();
-    if (!empty($results['commerce_order'])) {
-      $recurring_order_id = key($results['commerce_order']);
-      $recurring_order = commerce_order_load($recurring_order_id);
+    $recurring_order = $billing_cycle->getOrder();
+    if ($recurring_order) {
       $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
       // Generate a base line item for each license.
       $existing_line_items = $recurring_order_wrapper->commerce_line_items->value();

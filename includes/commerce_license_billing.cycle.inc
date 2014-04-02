@@ -71,4 +71,26 @@ class CommerceLicenseBillingCycle extends Entity {
     $type = entity_load_single('cl_billing_cycle_type', $this->type);
     return $type->getBillingCycleLabel($this->start, $this->end);
   }
+
+  /**
+   * Returns the matching order for this billing cycle.
+   *
+   * @return
+   *   An order entity, or FALSE if none found.
+   */
+  public function getOrder() {
+    $query = new EntityFieldQuery();
+    $query
+      ->entityCondition('entity_type', 'commerce_order')
+      ->entityCondition('bundle', 'recurring')
+      ->fieldCondition('cl_billing_cycle', 'target_id', $this->billing_cycle_id);
+    $results = $query->execute();
+    if (!empty($results['commerce_order'])) {
+      $order_id = key($results['commerce_order']);
+      return commerce_order_load($order_id);
+    }
+    else {
+      return FALSE;
+    }
+  }
 }
