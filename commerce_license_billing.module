@@ -527,7 +527,7 @@ function commerce_license_billing_generate_recurring_order($previous_order, $bil
  * @return
  *   The newly created and saved line item.
  */
-function commerce_license_billing_generate_base_line_item($license, $billing_cycle, $order_id) {
+function commerce_license_billing_generate_base_line_item(CommerceLicenseInterface $license, $billing_cycle, $order_id) {
   $product_wrapper = $license->wrapper->product;
   // Charge for the base product, there's no usage at this point.
   $line_item = commerce_line_item_new('recurring', $order_id);
@@ -693,7 +693,7 @@ function commerce_license_billing_order_refresh($order) {
  * @return
  *   The unsaved line item populated with the charge data.
  */
-function commerce_license_billing_line_item_new($license, $charge, $order_id = 0) {
+function commerce_license_billing_line_item_new(CommerceLicenseInterface $license, $charge, $order_id = 0) {
   // Create an empty line item and set the license reference.
   $line_item = commerce_line_item_new('recurring', $order_id);
   $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
@@ -749,7 +749,7 @@ function commerce_license_billing_populate_line_item($line_item, $charge) {
  *   - match: An array of keys to compare on the charge and the line item
  *     when looking for an existing line item for the charge.
  */
-function commerce_license_billing_collect_charges($license, $billing_cycle) {
+function commerce_license_billing_collect_charges(CommerceLicenseInterface $license, $billing_cycle) {
   $charges = array();
   // Charge the plan.
   // In case of prepaid, the plan charge is for the entire next billing cycle.
@@ -1006,7 +1006,7 @@ function commerce_license_billing_calculate_sell_price($order_id, $product, $qua
  * @return
  *   A billing cycle entity, or FALSE if none found.
  */
-function commerce_license_billing_get_license_billing_cycle($license) {
+function commerce_license_billing_get_license_billing_cycle(CommerceLicenseInterface $license) {
   // Load a line item that references the license.
   $query = new EntityFieldQuery;
   $query
@@ -1081,7 +1081,7 @@ function commerce_license_billing_commerce_license_delete($license) {
  * @param $product_id
  *   The product_id of the new plan.
  */
-function commerce_license_billing_change_plan($license, $product_id) {
+function commerce_license_billing_change_plan(CommerceLicenseInterface $license, $product_id) {
   if (commerce_license_billing_must_schedule_change($license, 'product')) {
     commerce_license_billing_schedule_change($license, 'product', $product_id);
     return;
@@ -1106,7 +1106,7 @@ function commerce_license_billing_change_plan($license, $product_id) {
  * @param $status
  *   The new status.
  */
-function commerce_license_billing_change_status($license, $status) {
+function commerce_license_billing_change_status(CommerceLicenseInterface $license, $status) {
   if (commerce_license_billing_must_schedule_change($license, 'status')) {
     commerce_license_billing_schedule_change($license, 'status', $status);
     return;
@@ -1131,7 +1131,7 @@ function commerce_license_billing_change_status($license, $status) {
  * @param $property
  *   The property that will be changed, usually product or status.
  */
-function commerce_license_billing_must_schedule_change($license, $property) {
+function commerce_license_billing_must_schedule_change(CommerceLicenseInterface $license, $property) {
   // Prepaid license changes are always scheduled to avoid having to credit
   // the customer in case they switch to a cheaper plan (or cancel).
   if ($license->wrapper->product->cl_billing_type->value() == 'prepaid') {
@@ -1168,7 +1168,7 @@ function commerce_license_billing_must_schedule_change($license, $property) {
  * @param $value
  *   The new value of the property.
  */
-function commerce_license_billing_schedule_change($license, $property, $value) {
+function commerce_license_billing_schedule_change(CommerceLicenseInterface $license, $property, $value) {
   db_insert('cl_scheduled_change')
     ->fields(array(
       'license_id' => $license->license_id,
@@ -1191,7 +1191,7 @@ function commerce_license_billing_schedule_change($license, $property, $value) {
  *   - value: The new value of the property.
  *   - created: The change request creation timestamp.
  */
-function commerce_license_billing_schedule_changes_list($license) {
+function commerce_license_billing_schedule_changes_list(CommerceLicenseInterface $license) {
   $scheduled_changes = &drupal_static(__FUNCTION__, array());
   if (!isset($scheduled_changes[$license->license_id])) {
     $scheduled_changes[$license->license_id] = array();
@@ -1215,7 +1215,7 @@ function commerce_license_billing_schedule_changes_list($license) {
  * @param $changes
  *   An array of change records.
  */
-function commerce_license_billing_apply_changes($license, $changes) {
+function commerce_license_billing_apply_changes(CommerceLicenseInterface $license, $changes) {
   // Apply each change to the license.
   foreach ($changes as $change) {
     $license->wrapper->{$change['property']} = $change['value'];
@@ -1245,7 +1245,7 @@ function commerce_license_billing_apply_changes($license, $changes) {
  *   - revision: The loaded revision, so that it doesn't need to be loaded
  *     separately by each usage group (freeQuantities()).
  */
-function commerce_license_billing_plan_history_list($license, $billing_cycle) {
+function commerce_license_billing_plan_history_list(CommerceLicenseInterface $license, $billing_cycle) {
   $history = &drupal_static(__FUNCTION__, array());
   if (!isset($history[$billing_cycle->billing_cycle_id][$license->license_id])) {
     $data = array(
@@ -1308,7 +1308,7 @@ function commerce_license_billing_plan_history_list($license, $billing_cycle) {
  *   - start: The start timestamp.
  *   - end: The end timestamp.
  */
-function commerce_license_billing_usage_history_list($license, $billing_cycle) {
+function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsageInterface $license, $billing_cycle) {
   $history = &drupal_static(__FUNCTION__, array());
   if (!isset($history[$billing_cycle->billing_cycle_id][$license->license_id])) {
     $data = array(
@@ -1383,7 +1383,7 @@ function commerce_license_billing_usage_history_clear($license_ids, $billing_cyc
  * @return
  *   An instance of a usage group plugin.
  */
-function commerce_license_billing_usage_group($license, $group_name) {
+function commerce_license_billing_usage_group(CommerceLicenseBillingUsageInterface $license, $group_name) {
   $usage_groups = $license->usageGroups();
   if (!isset($usage_groups[$group_name])) {
     throw new Exception('Invalid usage group specified for commerce_license_billing_usage_group().');
