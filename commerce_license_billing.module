@@ -1058,6 +1058,18 @@ function commerce_license_billing_commerce_license_delete($license) {
 }
 
 /**
+ * Implements hook_commerce_order_delete().
+ *
+ * Deletes the matching billing cycle when a recurring order is deleted.
+ */
+function commerce_license_billing_commerce_order_delete($order) {
+  if ($order->type == 'recurring') {
+    $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
+    $order_wrapper->cl_billing_cycle->delete();
+  }
+}
+
+/**
  * Changes the license plan.
  *
  * Schedules the change for the end of the billing cycle if needed.
