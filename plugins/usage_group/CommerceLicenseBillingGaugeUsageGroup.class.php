@@ -39,6 +39,11 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
     if (is_null($billingCycle)) {
       // Default to the current billing cycle.
       $billingCycle = commerce_license_billing_get_license_billing_cycle($this->license);
+      if (!$billingCycle) {
+        // A billing cycle could not be found, possibly because the license
+        // hasn't been activated yet.
+        return 0;
+      }
     }
 
     // Get the quantity of the usage record with the highest usage_id

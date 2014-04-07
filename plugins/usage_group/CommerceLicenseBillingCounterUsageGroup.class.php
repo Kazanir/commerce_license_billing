@@ -14,6 +14,11 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
     if (is_null($billingCycle)) {
       // Default to the current billing cycle.
       $billingCycle = commerce_license_billing_get_license_billing_cycle($this->license);
+      if (!$billingCycle) {
+        // A billing cycle could not be found, possibly because the license
+        // hasn't been activated yet.
+        return 0;
+      }
     }
 
     // Sum up all usage for the current billing cycle and revisions up to
