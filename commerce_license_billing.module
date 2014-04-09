@@ -817,13 +817,6 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
   // Prorate the collected charges.
   commerce_license_billing_prorate_charges($charges, $billing_cycle);
 
-  // Remove any charges that are too small.
-  foreach ($charges as $key => $charge) {
-    if ($charge['commerce_unit_price']['amount'] < 1) {
-      unset($charges[$key]);
-    }
-  }
-
   return $charges;
 }
 
