@@ -278,7 +278,10 @@ function commerce_license_billing_cycle_renew_queue_process($item) {
   $order = $billing_cycle->getOrder();
   if (!$order) {
     // No order found (which should never happen), so nothing else to be done.
-    return;
+    return array(
+      'status' => ADVANCEDQUEUE_STATUS_FAILURE,
+      'result' => 'Could not find matching order.',
+    );
   }
 
   $licenses = commerce_license_billing_get_recurring_order_licenses($order);
@@ -328,7 +331,10 @@ function commerce_license_billing_cycle_close_queue_process($item) {
   $order = $billing_cycle->getOrder();
   if (!$order) {
     // No order found (which should never happen), so nothing else to be done.
-    return;
+    return array(
+      'status' => ADVANCEDQUEUE_STATUS_FAILURE,
+      'result' => 'Could not find matching order.',
+    );
   }
 
   // Gather licenses.
@@ -373,6 +379,8 @@ function commerce_license_billing_cycle_close_queue_process($item) {
       entity_get_controller('commerce_order')->resetCache();
     }
 
+    // Advancedqueue will retry every 24h, until 5 retries have failed, as
+    // specified in commerce_license_billing_advanced_queue_info().
     return array(
       'status' => ADVANCEDQUEUE_STATUS_FAILURE,
       'result' => 'Incomplete usage information.',
