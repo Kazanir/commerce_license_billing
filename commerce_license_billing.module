@@ -6,6 +6,25 @@
  */
 
 /**
+ * Implements hook_menu().
+ */
+function commerce_license_billing_menu() {
+  $items = array();
+  $items['admin/commerce/billing/analyze/%commerce_order'] = array(
+    'title' => 'Analyze a recurring order',
+    'page callback' => 'commerce_license_billing_analyze_page',
+    'page arguments' => array(4),
+    'access callback' => 'commerce_order_access',
+    'access arguments' => array('view'),
+    'delivery callback' => 'ajax_deliver',
+    'type' => MENU_CALLBACK,
+    'file' => 'includes/commerce_license_billing.pages.inc',
+  );
+
+  return $items;
+}
+
+/**
  * Implements hook_views_api().
  */
 function commerce_license_billing_views_api() {

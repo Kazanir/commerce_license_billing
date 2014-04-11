@@ -8,6 +8,8 @@ dependencies[] = commerce_license
 dependencies[] = commerce_order
 dependencies[] = date
 dependencies[] = list
+dependencies[] = views
+dependencies[] = views_megarow
 
 ; Classes includes
 files[] = commerce_license_billing.info.inc
