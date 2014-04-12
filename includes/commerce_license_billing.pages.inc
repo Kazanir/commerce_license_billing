@@ -101,7 +101,7 @@ function commerce_license_billing_build_usage_status($license, $billing_cycle) {
   }
 
   if ($incomplete) {
-    return '<b>Missing usage records for: ' . implode(',', $incomplete) . '</b>. <br />';
+    return '<b>Missing usage records for: ' . implode(', ', $incomplete) . '</b>. <br />';
   }
   else {
     return '<i> Usage records are complete. </i> <br />';

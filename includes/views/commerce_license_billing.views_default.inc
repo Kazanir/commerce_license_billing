@@ -41,10 +41,10 @@ function commerce_license_billing_views_default_views() {
     'commerce_customer_address' => 'commerce_customer_address',
     'name' => 'name',
     'commerce_order_total' => 'commerce_order_total',
-    'megarow_links' => 'megarow_links',
     'status' => 'status',
+    'megarow_links' => 'megarow_links',
   );
-  $handler->display->display_options['style_options']['default'] = '-1';
+  $handler->display->display_options['style_options']['default'] = 'created';
   $handler->display->display_options['style_options']['info'] = array(
     'order_number' => array(
       'sortable' => 1,
@@ -55,7 +55,7 @@ function commerce_license_billing_views_default_views() {
     ),
     'created' => array(
       'sortable' => 1,
-      'default_sort_order' => 'asc',
+      'default_sort_order' => 'desc',
       'align' => '',
       'separator' => '',
       'empty_column' => 0,
@@ -81,14 +81,14 @@ function commerce_license_billing_views_default_views() {
       'separator' => '',
       'empty_column' => 0,
     ),
-    'megarow_links' => array(
+    'status' => array(
+      'sortable' => 1,
+      'default_sort_order' => 'asc',
       'align' => '',
       'separator' => '',
       'empty_column' => 0,
     ),
-    'status' => array(
-      'sortable' => 1,
-      'default_sort_order' => 'asc',
+    'megarow_links' => array(
       'align' => '',
       'separator' => '',
       'empty_column' => 0,
@@ -206,7 +206,7 @@ function commerce_license_billing_views_default_views() {
   $handler->display->display_options['tab_options']['description'] = 'Provides an overview of recurring billing activity.';
   $handler->display->display_options['tab_options']['weight'] = '0';
   $handler->display->display_options['tab_options']['name'] = 'management';
-  $translatables['billing_dashboard'] = array(
+  $translatables['commerce_license_billing_dashboard'] = array(
     t('Master'),
     t('Billing dashboard'),
     t('more'),
