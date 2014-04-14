@@ -701,7 +701,16 @@ function commerce_license_billing_order_refresh($order) {
 
   // Update the order, if new line items were created.
   if ($order_changed) {
-    $order_wrapper->commerce_line_items = $line_items;
+    if ($line_items) {
+      $order_wrapper->commerce_line_items = $line_items;
+    }
+    else {
+      // Doing $order_wrapper->commerce_line_items = array() produces
+      // $order->commerce_line_items = array(LANGUAGE_NONE => array()), which
+      // messes up the empty($order->commerce_line_items) check, so that
+      // case is handled separately without the wrapper.
+      $order->commerce_line_items = array();
+    }
     $order_wrapper->save();
   }
 }
