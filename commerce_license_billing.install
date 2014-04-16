@@ -223,3 +223,22 @@ function commerce_license_billing_update_7100() {
   $schema = commerce_license_billing_schema();
   db_create_table('cl_scheduled_change', $schema['cl_scheduled_change']);
 }
+
+/**
+ * Allow additional billing cycle periods.
+ */
+function commerce_license_billing_update_7101() {
+  $field = field_info_field('pce_period');
+  $field['settings'] = array(
+    'allowed_values' => array(
+      'hour' => 'Hour',
+      'day' => 'Day',
+      'week' => 'Week',
+      'month' => 'Month',
+      'quarter' => 'Quarter',
+      'half-year' => 'Half-year',
+      'year' => 'Year',
+    ),
+  );
+  field_update_field($field);
+}

@@ -15,9 +15,12 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
       'translatable' => '0',
       'settings' => array(
         'allowed_values' => array(
+          'hour' => 'Hour',
           'day' => 'Day',
           'week' => 'Week',
           'month' => 'Month',
+          'quarter' => 'Quarter',
+          'half-year' => 'Half-year',
           'year' => 'Year',
         ),
       ),
@@ -81,6 +84,13 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
     if (!$this->wrapper->pce_async->value()) {
       // This is a synchronous billing cycle, normalize the start timestamp.
       switch ($period) {
+        case 'hour':
+          $day = date('d', $start);
+          $month = date('m', $start);
+          $year = date('Y', $start);
+          $hour = date('H', $start);
+          $start = mktime($hour, 0, 0, $month, $day, $year);
+          break;
         case 'day':
           $start = strtotime('today');
           break;
@@ -93,6 +103,29 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
         case 'month':
           $start = strtotime(date('F Y', $start));
           break;
+        case 'quarter':
+          $year = date('Y', $start);
+          $dates = array(
+            mktime(0, 0, 0, 1, 1, $year), // january 1st
+            mktime(0, 0, 0, 4, 1, $year), // april 1st,
+            mktime(0, 0, 0, 7, 1, $year), // july 1st
+            mktime(0, 0, 0, 10, 1, $year), // october 1st,
+            mktime(0, 0, 0, 1, 1, $year + 1),
+          );
+
+          foreach ($dates as $index => $date) {
+            if ($start >= $date && $start < $dates[$index + 1]) {
+              $start = $date;
+              break;
+            }
+          }
+          break;
+        case 'half-year':
+          $year = date('Y', $start);
+          $january1st = mktime(0, 0, 0, 1, 1, $year);
+          $july1st = mktime(0, 0, 0, 7, 1, $year);
+          $start = ($start < $july1st) ? $january1st : $july1st;
+          break;
         case 'year':
           $start = mktime(0, 0, 0, 1, 1, date('Y', $start) + 1);
           break;
@@ -100,9 +133,12 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
     }
     // Calculate the end timestamp.
     $period_mapping = array(
+      'hour' => '+1 hour',
       'day' => '+1 day',
       'week' => '+1 week',
       'month' => '+1 month',
+      'quarter' => '+3 months',
+      'half-year' => '+6 months',
       'year' => '+1 year',
     );
     // The 1 is substracted to make sure that the billing cycle ends 1s before
