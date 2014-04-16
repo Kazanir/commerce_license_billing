@@ -34,6 +34,7 @@ function commerce_license_billing_default_rules_configuration() {
   $items['commerce_license_billing_set_postpaid_product_price'] = entity_import('rules_config', '{ "commerce_license_billing_set_postpaid_product_price" : {
       "LABEL" : "Set the price of postpaid products to 0",
       "PLUGIN" : "reaction rule",
+      "WEIGHT" : "-5",
       "OWNER" : "rules",
       "TAGS" : [ "Commerce License Billing" ],
       "REQUIRES" : [
@@ -51,12 +52,12 @@ function commerce_license_billing_default_rules_configuration() {
           }
         },
         { "entity_has_field" : { "entity" : [ "commerce-line-item" ], "field" : "commerce_product" } },
-        { "commerce_license_billing_product_elligible" : { "commerce_product" : [ "commerce-line-item:commerce-product" ] } },
         { "entity_has_field" : {
             "entity" : [ "commerce-line-item:commerce-product" ],
             "field" : "cl_billing_type"
           }
         },
+        { "commerce_license_billing_product_elligible" : { "commerce_product" : [ "commerce-line-item:commerce-product" ] } },
         { "data_is" : {
             "data" : [ "commerce-line-item:commerce-product:cl-billing-type" ],
             "value" : "postpaid"
@@ -77,6 +78,7 @@ function commerce_license_billing_default_rules_configuration() {
   $items['commerce_license_billing_prorate_prepaid_product_price'] = entity_import('rules_config', '{ "commerce_license_billing_prorate_prepaid_product_price" : {
       "LABEL" : "Prorate the price of prepaid products",
       "PLUGIN" : "reaction rule",
+      "WEIGHT" : "-5",
       "OWNER" : "rules",
       "TAGS" : [ "Commerce License Billing" ],
       "REQUIRES" : [ "rules", "commerce_license_billing", "commerce_product_reference" ],

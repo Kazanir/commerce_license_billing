@@ -138,7 +138,21 @@ function commerce_license_billing_prorate_line_item_action($line_item) {
   commerce_license_billing_prorate_charges($charges, $billing_cycle);
 
   // Set the prorated amount on the line item.
-  $price = $charges[0]['commerce_unit_price'];
-  $line_item_wrapper->commerce_unit_price = $price;
-  $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add($price, 'base_price', $price, TRUE);
+  $unit_price = commerce_price_wrapper_value($line_item_wrapper, 'commerce_unit_price', TRUE);
+  $updated_amount = $charges[0]['commerce_unit_price']['amount'];
+  $current_amount = $unit_price['amount'];
+  $difference = array(
+    'amount' => $updated_amount - $current_amount,
+    'currency_code' => $unit_price['currency_code'],
+    'data' => array(),
+  );
+
+  // Set the amount of the unit price and add the difference as a component.
+  $line_item_wrapper->commerce_unit_price->amount = $updated_amount;
+  $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add(
+    $line_item_wrapper->commerce_unit_price->value(),
+    'base_price',
+    $difference,
+    TRUE
+  );
 }
