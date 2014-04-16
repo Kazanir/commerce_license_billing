@@ -20,9 +20,12 @@ class CommerceLicenseBillingCycleTypeUIController extends EntityDefaultUIControl
    */
   public function hook_menu() {
     $items = parent::hook_menu();
+    $items[$this->path]['weight'] = 100;
     // Make the listing show up as a tab.
     $items[$this->path]['type'] = MENU_LOCAL_TASK;
-    $items[$this->path]['weight'] = 100;
+    // The listing should use the admin permission, not entity_access('view').
+    unset($items[$this->path]['access callback']);
+    $items[$this->path]['access arguments'] = array('administer licenses');
     // Replace the title callback of pages.
     $title_callback = 'commerce_license_billing_cycle_type_get_page_title';
     $items[$this->path . '/add']['title callback'] = $title_callback;

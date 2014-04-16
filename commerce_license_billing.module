@@ -188,8 +188,17 @@ function commerce_license_billing_commerce_line_item_type_info() {
  *   Whether access is allowed or not.
  */
 function commerce_license_billing_cycle_type_access($op, $cycle_type = NULL, $account = NULL) {
-  $engines = commerce_license_billing_get_plugins('billing_cycle_engine');
-  return user_access('administer licenses', $account) && !empty($engines);
+  if ($op == 'view') {
+    // This allows billing cycle types to always show up in the
+    // cl_billing_cycle_type entityreference field on the product edit form.
+    // Otherwise a recurring product couldn't be managed without the
+    // "administer licenses" permission.
+    return TRUE;
+  }
+  else {
+    $engines = commerce_license_billing_get_plugins('billing_cycle_engine');
+    return user_access('administer licenses', $account) && !empty($engines);
+  }
 }
 
 /**
