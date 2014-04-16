@@ -449,6 +449,13 @@ function commerce_license_billing_get_recurring_order_licenses($order) {
  *   The order to use as a base of the new recurring orders.
  */
 function commerce_license_billing_create_recurring_orders($order) {
+  if ($order->uid == 0) {
+    // This is an anonymous order.
+    $message = 'Could not open a recurring order for order #@order_id because its owner is not known.';
+    watchdog('commerce_license_billing', $message, array('@order_id' => $order->order_id), WATCHDOG_ERROR);
+    return;
+  }
+
   // Group licenses by billing cycle type.
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
   $billing_cycle_type_ids = array();

@@ -6,6 +6,27 @@
  */
 
 /**
+ * Implements hook_default_rules_configuration_alter().
+ */
+function commerce_license_billing_default_rules_configuration_alter(&$configs) {
+  // The order account rules run at commerce_checkout_complete, which is usually
+  // after commerce_payment_order_paid_in_full. This means that if the checkout
+  // was anonymous, a recurring order can't be opened because the order owner
+  // is not yet known. Until this is fixed in Commerce, this module needs to
+  // ensure that these rules run at commerce_payment_order_paid_in_full as well.
+  $configuration_names = array(
+    'commerce_checkout_order_convert',
+    'commerce_checkout_new_account',
+  );
+
+  foreach ($configuration_names as $configuration_name) {
+    if (isset($configs[$configuration_name])) {
+      $configs[$configuration_name]->event('commerce_payment_order_paid_in_full');
+    }
+  }
+}
+
+/**
  * Implements hook_default_rules_configuration().
  */
 function commerce_license_billing_default_rules_configuration() {
