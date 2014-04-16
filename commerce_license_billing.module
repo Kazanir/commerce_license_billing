@@ -1397,6 +1397,11 @@ function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsage
  *   The billing cycle entity.
  */
 function commerce_license_billing_usage_history_clear($license_ids, $billing_cycle) {
+  if (!$license_ids) {
+    // No license ids provided.
+    return;
+  }
+
   $delete = db_delete('cl_billing_usage');
   $delete->condition('license_id', $license_ids);
   // Match closed records that started or ended in the provided billing cycle.
