@@ -77,7 +77,7 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
     // Remove any usage that is free according to the active plan.
     foreach ($usage as $index => $usage_record) {
       $revision_id = $usage_record['revision_id'];
-      if ($usage_record['quantity'] <= $free_quantities[$revision_id]) {
+      if ($usage_record['quantity'] <= $free_quantities[$revision_id]['quantity']) {
         unset($usage[$index]);
       }
     }

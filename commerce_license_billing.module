@@ -501,7 +501,7 @@ function commerce_license_billing_create_recurring_orders($order) {
       $existing_line_items = $recurring_order_wrapper->commerce_line_items->value();
       $line_items = array();
       foreach ($licenses as $license) {
-        $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order_id);
+        $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order->order_id);
       }
       $recurring_order_wrapper->commerce_line_items = array_merge($existing_line_items, $line_items);
       $recurring_order_wrapper->save();
