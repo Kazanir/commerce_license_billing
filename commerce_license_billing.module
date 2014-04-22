@@ -564,7 +564,7 @@ function commerce_license_billing_generate_base_line_item(CommerceLicenseInterfa
   // Charge for the base product, there's no usage at this point.
   $line_item = commerce_line_item_new('recurring', $order_id);
   $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-  $line_item_wrapper->line_item_label = $product_wrapper->title->value();
+  $line_item_wrapper->line_item_label = $product_wrapper->sku->value();
   $line_item_wrapper->commerce_product = $product_wrapper->value();
   $line_item_wrapper->quantity = 1;
   $line_item_wrapper->cl_billing_license = $license;
@@ -765,7 +765,7 @@ function commerce_license_billing_line_item_new(CommerceLicenseInterface $licens
  */
 function commerce_license_billing_populate_line_item($line_item, $charge) {
   $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-  $line_item_wrapper->line_item_label = $charge['commerce_product']->title;
+  $line_item_wrapper->line_item_label = $charge['commerce_product']->sku;
   $line_item_wrapper->commerce_product = $charge['commerce_product'];
   $line_item_wrapper->quantity = $charge['quantity'];
   $line_item_wrapper->commerce_unit_price = $charge['commerce_unit_price'];
