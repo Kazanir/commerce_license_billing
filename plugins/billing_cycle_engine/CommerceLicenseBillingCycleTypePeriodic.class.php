@@ -1,7 +1,7 @@
 <?php
 
 /**
- * A perodic billing cycle engine API.
+ * A periodic billing cycle engine API.
  */
 class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycleTypeBase {
 
@@ -141,7 +141,7 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
       'half-year' => '+6 months',
       'year' => '+1 year',
     );
-    // The 1 is substracted to make sure that the billing cycle ends 1s before
+    // The 1 is subtracted to make sure that the billing cycle ends 1s before
     // the next one starts (January 31st 23:59:59, for instance, with the
     // next one starting on February 1st 00:00:00).
     $end = strtotime($period_mapping[$period], $start) - 1;
@@ -195,7 +195,7 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
    * Returns a label for a billing cycle with the provided start and end.
    *
    * @param $start
-   *   The unix timestmap when the billing cycle starts.
+   *   The unix timestamap when the billing cycle starts.
    * @param $end
    *   The unix timestamp when the billing cycle ends.
    *

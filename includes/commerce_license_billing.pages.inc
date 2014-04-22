@@ -53,7 +53,6 @@ function commerce_license_billing_analyze_page($order) {
     $items = array();
     foreach ($plan_history as $history_record) {
       $plan = commerce_product_load($history_record['product_id']);
-      $status = $license_statuses[$history_record['status']];
       $start = format_date($history_record['start'], 'short');
       $end = format_date($history_record['end'], 'short');
 
