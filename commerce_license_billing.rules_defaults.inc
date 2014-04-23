@@ -187,22 +187,13 @@ function commerce_license_billing_default_rules_configuration() {
     $items['rules_commerce_license_billing_update_order_charged'] = entity_import('rules_config', '{ "rules_commerce_license_billing_update_order_charged" : {
         "LABEL" : "Update status of successfully charged recurring order",
         "PLUGIN" : "reaction rule",
-        "OWNER" : "rules",
+        "WEIGHT" : "11",
         "TAGS" : [ "Commerce License Billing" ],
-        "REQUIRES" : [ "rules", "commerce_payment", "commerce_order", "entity" ],
-        "ON" : { "commerce_order_update" : [] },
-        "IF" : [
-          { "NOT data_is" : {
-              "data" : [ "commerce-order-unchanged:status" ],
-              "value" : "cardonfile_charged"
-            }
-          },
-          { "data_is" : { "data" : [ "commerce-order:status" ], "value" : "cardonfile_charged" } },
-          { "commerce_payment_order_balance_comparison" : { "commerce_order" : [ "commerce_order" ], "value" : "0" } }
-        ],
+        "REQUIRES" : [ "commerce_order", "commerce_cardonfile" ],
+        "ON" : [ "commerce_cardonfile_charge_success" ],
         "DO" : [
           { "commerce_order_update_status" : {
-              "commerce_order" : [ "commerce_order" ],
+              "commerce_order" : [ "order" ],
               "order_status" : "completed"
             }
           }
