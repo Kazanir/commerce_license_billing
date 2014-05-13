@@ -1538,7 +1538,6 @@ function commerce_license_billing_configure_product_types($types) {
     $field = array(
       'field_name' => 'cl_billing_type',
       'type' => 'list_text',
-      'entity_type' => 'commerce_product',
       'cardinality' => 1,
       'translatable' => 0,
       'module' => 'list',
