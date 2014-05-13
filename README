@@ -3,7 +3,7 @@ recurring billing for licenses.
 
 Getting started
 ---------------
-1. Go to admin/config/licenses/billing-cycle-types and add a billing cycle type.
+1. Go to admin/commerce/config/license/billing-cycle-types and add a billing cycle type.
 2. Create a product, select a license type, then below select your billing cycle type
 and billing type (prepaid or postpaid).
 3. Checkout the product. If you selected postpaid as the billing type, your product

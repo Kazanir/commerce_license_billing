@@ -449,7 +449,7 @@ function commerce_license_billing_get_recurring_order_licenses($order) {
  *
  * The provided order is first scanned, and all licensable products are
  * gathered. Their billing cycle types are gathered, and the appropriate
- * billing cyles are opened (if they haven't been previously).
+ * billing cycles are opened (if they haven't been previously).
  * An order per billing cycle is created (if it hasn't been previously),
  * and the new line items are added.
  *
