@@ -48,6 +48,12 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
     );
     $fields['pce_async']['instance'] = array(
       'label' => 'Asynchronous',
+      'description' => 'Determines whether the billing cycle starts at the time of purchase, ' .
+                       'instead of starting at the beginning of the calendar period. <br />' .
+                       'For an order placed on Jan 5th, a monthly synchronous billing cycle ' .
+                       'would start on Jan 1st 00:00 and end on Jan 31st 23:59:59, <br />' .
+                       'while a monthly asynchronous billing cycle would start at the ' .
+                       'time of purchase (Jan 5th) and end a month later (Feb 5th).',
       'required' => FALSE,
       'widget' => array(
         'module' => 'options',
