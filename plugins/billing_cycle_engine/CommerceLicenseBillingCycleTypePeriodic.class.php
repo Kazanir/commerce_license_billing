@@ -127,7 +127,7 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
           $start = ($start < $july1st) ? $january1st : $july1st;
           break;
         case 'year':
-          $start = mktime(0, 0, 0, 1, 1, date('Y', $start) + 1);
+          $start = mktime(0, 0, 0, 1, 1, date('Y', $start));
           break;
       }
     }
