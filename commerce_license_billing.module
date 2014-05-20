@@ -411,7 +411,7 @@ function commerce_license_billing_cycle_close_queue_process($item) {
     // Advancedqueue will retry every 24h, until 5 retries have failed, as
     // specified in commerce_license_billing_advanced_queue_info().
     return array(
-      'status' => ADVANCEDQUEUE_STATUS_FAILURE,
+      'status' => ADVANCEDQUEUE_STATUS_FAILURE_RETRY,
       'result' => 'Incomplete usage information.',
     );
   }
