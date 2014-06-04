@@ -302,14 +302,14 @@ function commerce_license_billing_advanced_queue_info() {
 function commerce_license_billing_cycle_renew_queue_process($item) {
   $billing_cycle_id = $item->data['billing_cycle_id'];
   $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
-  $order = $billing_cycle->getOrder();
-  if (!$order) {
-    // No order found (which should never happen), so nothing else to be done.
+  if (!$billing_cycle) {
+    // The billing cycle has been deleted in the meantime. Nothing more to do.
     return array(
       'status' => ADVANCEDQUEUE_STATUS_FAILURE,
-      'result' => 'Could not find matching order.',
+      'result' => 'Could not find the billing cycle.',
     );
   }
+  $order = $billing_cycle->getOrder();
 
   $licenses = commerce_license_billing_get_recurring_order_licenses($order);
   foreach ($licenses as $license) {
@@ -355,14 +355,14 @@ function commerce_license_billing_cycle_renew_queue_process($item) {
 function commerce_license_billing_cycle_close_queue_process($item) {
   $billing_cycle_id = $item->data['billing_cycle_id'];
   $billing_cycle = entity_load_single('cl_billing_cycle', $billing_cycle_id);
-  $order = $billing_cycle->getOrder();
-  if (!$order) {
-    // No order found (which should never happen), so nothing else to be done.
+  if (!$billing_cycle) {
+    // The billing cycle has been deleted in the meantime. Nothing more to do.
     return array(
       'status' => ADVANCEDQUEUE_STATUS_FAILURE,
-      'result' => 'Could not find matching order.',
+      'result' => 'Could not find the billing cycle.',
     );
   }
+  $order = $billing_cycle->getOrder();
 
   // Close the billing cycle right away.
   if ($billing_cycle->status == 1) {
