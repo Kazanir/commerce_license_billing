@@ -374,8 +374,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
 
     // Forward time to the expected suspension start, and then do it.
     commerce_license_set_time($this->plan_durations[2][0]);
-    $this->postpaid_license->status = COMMERCE_LICENSE_SUSPENDED;
-    $this->postpaid_license->save();
+    $this->postpaid_license->suspend();
 
     // Try to register usage for the suspended revision, make sure it fails.
     $suspended_revision_id = $this->postpaid_license->revision_id;
@@ -394,8 +393,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
 
     // Forward time to the expected reactivation start, and then do it.
     commerce_license_set_time($this->plan_durations[3][0]);
-    $this->postpaid_license->status = COMMERCE_LICENSE_ACTIVE;
-    $this->postpaid_license->save();
+    $this->postpaid_license->activate();
 
     // The previous active revision went from 3/4 to 1/4 of the billing cycle
     // so the expected price needs to change.
@@ -573,8 +571,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
 
     // Cancel all licenses.
     foreach ($licenses as $license) {
-      $license->status = COMMERCE_LICENSE_REVOKED;
-      $license->save();
+      $license->revoke();
     }
 
     // Close the second biling cycle.
