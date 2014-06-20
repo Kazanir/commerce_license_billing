@@ -961,6 +961,8 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, $
     'unit_price' => $price,
     'total' => $price,
   );
+  // The price calculation might have changed the currency of the price.
+  $zero_price['currency_code'] = $price['currency_code'];
   // Price the usage.
   $license = entity_create('commerce_license', array('type' => $license_type));
   $license->product_id = $product->product_id;
