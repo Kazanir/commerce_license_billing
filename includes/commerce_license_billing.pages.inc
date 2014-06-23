@@ -128,12 +128,13 @@ function commerce_license_billing_build_usage_table($revision_id, $license, $bil
   $usage_groups = $license->usageGroups();
   $usage_history = commerce_license_billing_usage_history_list($license, $billing_cycle);
   $attributes = array('style' => 'width: 50%; margin-top: 10px;');
-  $header = array(t('Usage group'), t('Quantity'), t('Start'), t('End'));
+  $header = array(t('Record ID'), t('Usage group'), t('Quantity'), t('Start'), t('End'));
   $rows = array();
   foreach ($usage_history as $group_name => $grouped_records) {
     foreach ($grouped_records as $usage_record) {
       if ($usage_record['revision_id'] == $revision_id) {
         $row = array();
+        $row[] = $usage_record['usage_id'];
         $row[] = $usage_groups[$group_name]['title'];
         $row[] = $usage_record['quantity'];
         $row[] = format_date($usage_record['start'], 'short');
