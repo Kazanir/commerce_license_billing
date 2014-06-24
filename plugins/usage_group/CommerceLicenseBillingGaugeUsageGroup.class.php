@@ -102,7 +102,8 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
     // A new revision was created, and the previous revision was active.
     // Close previous open usage, reopen for the new revision if still active.
     elseif ($previous_status == COMMERCE_LICENSE_ACTIVE) {
-      // Get the quantities of any open usage.
+      // Get the open usage for the previous revision. We can't use
+      // $this->currentUsage() because it looks at the current revision instead.
       $data = array(
         ':group_name' => $this->groupName,
         ':revision_id' => $this->license->original->revision_id,
@@ -110,8 +111,10 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
       $query = db_query('SELECT quantity FROM {cl_billing_usage}
                             WHERE usage_group = :group_name
                               AND revision_id = :revision_id
-                                AND end = 0', $data);
-      $previous_usage = $query->fetchAssoc();
+                                AND end = 0
+                                  ORDER BY usage_id DESC
+                                    LIMIT 1', $data);
+      $previous_usage = $query->fetchField();
 
       // Close the open usage for the previous revision (plan).
       db_update('cl_billing_usage')
@@ -119,6 +122,7 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
           'end' => $current_time - 1,
         ))
         ->condition('revision_id', $this->license->original->revision_id)
+        ->condition('usage_group', $this->groupName)
         ->condition('end', '0')
         ->execute();
 
@@ -126,10 +130,8 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
       drupal_static_reset('commerce_license_billing_usage_history_list');
 
       // If the license is still active, reopen the usage.
-      if ($new_status == COMMERCE_LICENSE_ACTIVE) {
-        foreach ($previous_usage as $quantity) {
-          $this->addUsage($this->license->revision_id, $quantity, $current_time);
-        }
+      if ($new_status == COMMERCE_LICENSE_ACTIVE && is_numeric($previous_usage)) {
+        $this->addUsage($this->license->revision_id, $previous_usage, $current_time);
       }
     }
     // A new revision has been created, unsuspending the license. Reopen
@@ -143,7 +145,8 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
       $query = db_query('SELECT quantity FROM {cl_billing_usage}
                             WHERE usage_group = :group_name
                               AND license_id = :license_id
-                                ORDER BY end DESC, usage_id DESC LIMIT 1', $data);
+                                ORDER BY usage_id DESC
+                                  LIMIT 1', $data);
       $previous_quantity = $query->fetchField();
       $this->addUsage($this->license->revision_id, $previous_quantity, $current_time);
     }
