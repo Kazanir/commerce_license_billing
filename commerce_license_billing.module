@@ -1239,6 +1239,9 @@ function commerce_license_billing_schedule_change(CommerceLicenseInterface $lice
       'created' => REQUEST_TIME,
     ))
     ->execute();
+
+  // Reset the static cache to allow the new scheduled change to show up.
+  drupal_static_reset('commerce_license_billing_schedule_changes_list');
 }
 
 /**
