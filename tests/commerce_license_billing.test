@@ -17,10 +17,12 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
   protected $prepaid_product = NULL;
   protected $another_prepaid_product = NULL;
   protected $prepaid_product_display = NULL;
+  protected $another_prepaid_product_display = NULL;
   protected $postpaid_product = NULL;
   protected $another_postpaid_product = NULL;
   protected $postpaid_product_display = NULL;
   protected $prepaid_license = NULL;
+  protected $another_prepaid_license = NULL;
   protected $postpaid_license = NULL;
 
   public static function getInfo() {
@@ -56,16 +58,25 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     $this->billing_cycle_type = $billing_cycle_type;
     $this->billing_cycle = $billing_cycle_type->getBillingCycle($this->store_customer->uid);
 
-    // Create a prepaid product that holds the license.
-    $this->prepaid_product = $this->createProduct('PREPAID-LICENSE-PLAN-A', 50, 'prepaid');
-    // Create a product display for the prepaid product.
+    // Initialize an empty product display.
     $node = (object) array('type' => 'product_display');
     node_object_prepare($node);
     $node->uid = 1;
-    $node->title = 'Prepaid license';
-    $node->field_product[LANGUAGE_NONE][]['product_id'] = $this->prepaid_product->product_id;
-    node_save($node);
-    $this->prepaid_product_display = $node;
+
+    // Create a prepaid product that holds the license.
+    $this->prepaid_product = $this->createProduct('PREPAID-LICENSE-PLAN-A', 50, 'prepaid');
+    $this->another_prepaid_product = $this->createProduct('PREPAID-LICENSE-PLAN-B', 50, 'prepaid');
+    // Create product displays for the prepaid products.
+    $prepaid_display = clone $node;
+    $prepaid_display->title = 'Prepaid license';
+    $prepaid_display->field_product[LANGUAGE_NONE][0]['product_id'] = $this->prepaid_product->product_id;
+    node_save($prepaid_display);
+    $this->prepaid_product_display = $prepaid_display;
+    $another_prepaid_display = clone $node;
+    $another_prepaid_display->title = 'Another prepaid license';
+    $another_prepaid_display->field_product[LANGUAGE_NONE][0]['product_id'] = $this->another_prepaid_product->product_id;
+    node_save($another_prepaid_display);
+    $this->another_prepaid_product_display = $another_prepaid_display;
 
     // Create a postpaid product that holds the license.
     $this->postpaid_product = $this->createProduct('POSTPAID-LICENSE-PLAN-A', 40, 'postpaid');
@@ -78,18 +89,16 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     node_save($node);
     $this->postpaid_product_display = $node;
 
-    // Create two more products to serve as alternative plans.
-    $this->another_prepaid_product = $this->createProduct('PREPAID-LICENSE-PLAN-B', 50, 'prepaid');
+    // Serves only as an alternative plan, so it doesn't need a product display.
     $this->another_postpaid_product = $this->createProduct('POSTPAID-LICENSE-PLAN-B', 80, 'postpaid');
-
-    $this->start = time();
   }
 
   /**
-   * Main test function. Runs all of the subtests.
+   * Main test, composed of different subtests.
    *
-   * Needed because SimpleTest reinstalls Drupal between test runs, but we
-   * always need the results of the first checkout.
+   * SimpleTest reinstalls Drupal between test runs, but we want to simulate
+   * a working system from checkout through different renewals, with plan
+   * and usage changes in between.
    */
   public function testRecurring() {
     $checkout_success = $this->checkoutTest();
@@ -100,6 +109,71 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
       $this->orderRefreshTest();
       $this->billingCycleCloseTest();
     }
+  }
+
+  /**
+   * Tests prepaid license cancellations (which need to be scheduled).
+   */
+  public function testPrepaidLicenseCancellation() {
+    // Purchase the second prepaid product.
+    $this->drupalLogin($this->store_customer);
+    $this->drupalPost('node/' . $this->another_prepaid_product_display->nid, array(), t('Add to cart'));
+    $this->completeCheckout();
+
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'commerce_license')
+      ->propertyCondition('product_id', $this->another_prepaid_product->product_id);
+    $result = $query->execute();
+    if (!$result) {
+      $this->assertTrue(FALSE, 'The second prepaid license was successfuly created.');
+      return;
+    }
+    $this->another_prepaid_license = entity_load_single('commerce_license', key($result['commerce_license']));
+
+    $recurring_order = $this->getBillingCycleOrder($this->billing_cycle);
+    // Confirm that the new license has a line item in the recurring order.
+    $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
+    $found = FALSE;
+    $line_item_id = NULL;
+    foreach ($recurring_order_wrapper->commerce_line_items as $line_item_wrapper) {
+      if ($line_item_wrapper->cl_billing_license->raw() == $this->another_prepaid_license->license_id) {
+        $found = TRUE;
+        $line_item_id = $line_item_wrapper->line_item_id->value();
+        break;
+      }
+    }
+    $this->assertTrue($found, 'The second prepaid license has a matching recurring line item.');
+
+    // Schedule cancellation.
+    commerce_license_billing_change_status($this->another_prepaid_license, COMMERCE_LICENSE_REVOKED);
+
+    // Reload the order and re-examine the line items.
+    // Confirm that the license no longer has a line item in the recurring order.
+    entity_get_controller('commerce_order')->resetCache();
+    drupal_static_reset('commerce_license_billing_commerce_order_load');
+    $recurring_order = commerce_order_load($recurring_order->order_id);
+    $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
+    $found = FALSE;
+    foreach ($recurring_order_wrapper->commerce_line_items as $line_item_wrapper) {
+      if ($line_item_wrapper->cl_billing_license->raw() == $this->another_prepaid_license->license_id) {
+        $found = TRUE;
+        break;
+      }
+    }
+    $this->assertFalse($found, 'The second prepaid license no longer has a matching recurring line item.');
+    $line_item = commerce_line_item_load($line_item_id);
+    $this->assertFalse($line_item, 'The recurring line item has been deleted from the system.');
+
+    // Close the billing cycle.
+    commerce_license_set_time($this->billing_cycle->end);
+    $item = new stdClass;
+    $item->data = array();
+    $item->data['billing_cycle_id'] = $this->billing_cycle->billing_cycle_id;
+    commerce_license_billing_cycle_renew_queue_process($item);
+    commerce_license_billing_cycle_close_queue_process($item);
+    $recurring_order = commerce_order_load($recurring_order->order_id);
+    $this->assertFalse($recurring_order, 'The empty recurring order has been deleted from the system.');
   }
 
   /**

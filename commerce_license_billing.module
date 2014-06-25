@@ -363,6 +363,15 @@ function commerce_license_billing_cycle_close_queue_process($item) {
     );
   }
   $order = $billing_cycle->getOrder();
+  // The recurring order is empty. It probably contained prepaid licenses
+  // that got cancelled in the meantime. Delete the order and stop here.
+  if (empty($order->commerce_line_items)) {
+    commerce_order_delete($order->order_id);
+    return array(
+      'status' => ADVANCEDQUEUE_STATUS_SUCCESS,
+      'result' => 'Closed the billing cycle.',
+    );
+  }
 
   // Close the billing cycle right away.
   if ($billing_cycle->status == 1) {
@@ -637,6 +646,7 @@ function commerce_license_billing_order_refresh($order) {
   $billing_cycle = $order_wrapper->cl_billing_cycle->value();
   $licenses = array();
   $old_line_items = array();
+  $old_line_item_ids = array();
   foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
     // Gather all licenses that are in this order.
     $license_id = $line_item_wrapper->cl_billing_license->raw();
@@ -646,6 +656,7 @@ function commerce_license_billing_order_refresh($order) {
 
     // Group the old line items by their license id.
     $old_line_items[$license_id][] = $line_item_wrapper;
+    $old_line_item_ids[] = $line_item_wrapper->line_item_id->value();
   }
 
   $order_changed = FALSE;
@@ -684,7 +695,7 @@ function commerce_license_billing_order_refresh($order) {
         $line_item = commerce_license_billing_line_item_new($license, $charge, $order->order_id);
         commerce_line_item_save($line_item);
 
-        $line_items[] = $line_item;
+        $line_items[$line_item->line_item_id] = $line_item;
         $order_changed = TRUE;
       }
       else {
@@ -709,15 +720,26 @@ function commerce_license_billing_order_refresh($order) {
           $order_changed = TRUE;
         }
 
-        $line_items[] = $line_item;
+        $line_items[$line_item->line_item_id] = $line_item;
       }
     }
+  }
+
+  // One or more line items might have been dropped (for example, because a
+  // prepaid license has been scheduled for cancellation).
+  $new_line_item_ids = array_keys($line_items);
+  $dropped_line_item_ids = array_diff($old_line_item_ids, $new_line_item_ids);
+  if ($dropped_line_item_ids) {
+    // Make sure to update the order line item list.
+    $order_changed = TRUE;
+    // Delete dropped line items.
+    commerce_line_item_delete_multiple($dropped_line_item_ids);
   }
 
   // Update the order, if new line items were created.
   if ($order_changed) {
     if ($line_items) {
-      $order_wrapper->commerce_line_items = $line_items;
+      $order_wrapper->commerce_line_items = array_values($line_items);
     }
     else {
       // Doing $order_wrapper->commerce_line_items = array() produces
@@ -806,18 +828,30 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
   // In case of postpaid, all plan changes in the current month are charged.
   $product_wrapper = $license->wrapper->product;
   if ($product_wrapper->cl_billing_type->value() == 'prepaid') {
-    $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
-    $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
+    $scheduled_for_cancellation = FALSE;
+    $scheduled_changes = commerce_license_billing_schedule_changes_list($license);
+    foreach ($scheduled_changes as $scheduled_change) {
+      if ($scheduled_change['property'] == 'status' && $scheduled_change['value'] == COMMERCE_LICENSE_REVOKED) {
+        $scheduled_for_cancellation = TRUE;
+        break;
+      }
+    }
 
-    $charges[] = array(
-      'quantity' => 1,
-      'commerce_product' => $product_wrapper->value(),
-      'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-      'cl_billing_start' => $next_billing_cycle->start,
-      'cl_billing_end' => $next_billing_cycle->end,
-      'match' => array('commerce_product'),
-      'prorate' => FALSE,
-    );
+    // If the license is scheduled for cancellation, then it doesn't need
+    // a charge for the next billing cycle, it will already be gone by then.
+    if (!$scheduled_for_cancellation) {
+      $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
+      $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
+      $charges[] = array(
+        'quantity' => 1,
+        'commerce_product' => $product_wrapper->value(),
+        'commerce_unit_price' => $product_wrapper->commerce_price->value(),
+        'cl_billing_start' => $next_billing_cycle->start,
+        'cl_billing_end' => $next_billing_cycle->end,
+        'match' => array('commerce_product'),
+        'prorate' => FALSE,
+      );
+    }
   }
   elseif ($product_wrapper->cl_billing_type->value() == 'postpaid') {
     $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle);
