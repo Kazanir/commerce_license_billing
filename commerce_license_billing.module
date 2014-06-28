@@ -849,7 +849,6 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
         'cl_billing_start' => $next_billing_cycle->start,
         'cl_billing_end' => $next_billing_cycle->end,
         'match' => array('commerce_product'),
-        'prorate' => FALSE,
       );
     }
   }
@@ -873,7 +872,6 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
         'cl_billing_start' => $history_record['start'],
         'cl_billing_end' => $history_record['end'],
         'match' => array('commerce_product', 'cl_billing_start'),
-        'prorate' => TRUE,
       );
     }
   }
@@ -895,38 +893,12 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
           'cl_billing_start' => $usage_record['start'],
           'cl_billing_end' => $usage_record['end'],
           'match' => array('commerce_product', 'cl_billing_start'),
-          'prorate' => TRUE,
         );
       }
     }
   }
 
-  // Prorate the collected charges.
-  commerce_license_billing_prorate_charges($charges, $billing_cycle);
-
   return $charges;
-}
-
-/**
- * Prorate the collected charges for the given billing cycle.
- *
- * Any charges with prorated amounts smaller than 0.01 are dropped.
- *
- * @param $charges
- *   The charges array provided by commerce_license_billing_collect_charges().
- * @param $billing_cycle
- *   The billing cycle entity.
- */
-function commerce_license_billing_prorate_charges(&$charges, $billing_cycle) {
-  $billing_cycle_duration = $billing_cycle->end - $billing_cycle->start;
-  foreach ($charges as $key => &$charge) {
-    $price = &$charge['commerce_unit_price'];
-    if ($charge['prorate'] && $price['amount'] > 0) {
-      $duration = $charge['cl_billing_end'] - $charge['cl_billing_start'];
-      $price['amount'] = $price['amount'] * ($duration / $billing_cycle_duration);
-      $price['amount'] = round($price['amount']);
-    }
-  }
 }
 
 /**

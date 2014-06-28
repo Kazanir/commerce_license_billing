@@ -119,7 +119,39 @@ function commerce_license_billing_default_rules_configuration() {
         }
       ],
       "DO" : [
-        { "commerce_license_billing_prorate_line_item" : { "commerce_line_item" : [ "commerce_line_item" ] } }
+        { "commerce_license_billing_prorate_product_line_item" : { "commerce_line_item" : [ "commerce_line_item" ] } }
+      ]
+    }
+  }');
+  $items['commerce_license_billing_prorate_recurring_line_item'] = entity_import('rules_config', '{ "commerce_license_billing_prorate_recurring_line_item" : {
+      "LABEL" : "Prorate the price of a recurring line item",
+      "PLUGIN" : "reaction rule",
+      "WEIGHT" : "-5",
+      "OWNER" : "rules",
+      "TAGS" : [ "Commerce License Billing" ],
+      "REQUIRES" : [ "rules", "commerce_license_billing", "commerce_product_reference" ],
+      "ON" : { "commerce_product_calculate_sell_price" : [] },
+      "IF" : [
+        { "entity_is_of_bundle" : {
+            "entity" : [ "commerce-line-item" ],
+            "type" : "commerce_line_item",
+            "bundle" : { "value" : { "recurring" : "recurring" } }
+          }
+        },
+        { "entity_has_field" : { "entity" : [ "commerce-line-item" ], "field" : "commerce_product" } },
+        { "entity_has_field" : {
+            "entity" : [ "commerce-line-item:commerce-product" ],
+            "field" : "cl_billing_type"
+          }
+        },
+        { "NOT data_is" : {
+            "data" : [ "commerce-line-item:commerce-product:cl-billing-type" ],
+            "value" : "prepaid"
+          }
+        }
+      ],
+      "DO" : [
+        { "commerce_license_billing_prorate_recurring_line_item" : { "commerce_line_item" : [ "commerce_line_item" ] } }
       ]
     }
   }');
