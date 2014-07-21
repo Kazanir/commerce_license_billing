@@ -922,12 +922,6 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
 function commerce_license_billing_estimate_cost($license_type, $uid, $product, $usage = NULL) {
   // Prepare commonly needed data.
   $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
-  $zero_price = array(
-    'amount' => 0,
-    'currency_code' => $product_wrapper->commerce_price->currency_code->value(),
-    'data' => array(),
-  );
-  $zero_price['data'] = commerce_price_component_add($zero_price, 'base_price', $zero_price, TRUE, FALSE);
   // Construct a billing cycle.
   $billing_cycle_type = $product_wrapper->cl_billing_cycle_type->value();
   $current_time = commerce_license_get_time();
@@ -967,8 +961,15 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, $
     'unit_price' => $price,
     'total' => $price,
   );
-  // The price calculation might have changed the currency of the price.
-  $zero_price['currency_code'] = $price['currency_code'];
+  // The price calculation might have changed the currency of the price, so
+  // we don't initialize our "zero" price struct until this point.
+  $zero_price = array(
+    'amount' => 0,
+    'currency_code' => $price['currency_code'],
+    'data' => array(),
+  );
+  $zero_price['data'] = commerce_price_component_add($zero_price, 'base_price', $zero_price, TRUE, FALSE);
+
   // Price the usage.
   $license = entity_create('commerce_license', array('type' => $license_type));
   $license->product_id = $product->product_id;
