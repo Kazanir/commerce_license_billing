@@ -1650,8 +1650,8 @@ function commerce_license_billing_configure_product_types($types) {
  */
 function commerce_license_billing_allowed_schedule_values($field, $instance, $entity_type, $entity) {
   return array(
-    'product' => 'Postpone plan changes to the end of the billing cycle.',
-    'status' => 'Postpone status changes to the end of the billing cycle.',
+    'product' => t('Postpone plan changes to the end of the billing cycle.'),
+    'status' => t('Postpone status changes to the end of the billing cycle.'),
   );
 }
 
