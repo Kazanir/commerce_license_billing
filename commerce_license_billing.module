@@ -1023,6 +1023,16 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, $
   // Make sure the final amount has been rounded.
   $estimation['total']['amount'] = round($estimation['total']['amount']);
 
+  // Allow anyone doing order-level logic or other tricky things to alter the
+  // estimation here.
+  $context = array(
+    'license' => $license,
+    'billing_cycle' => $billing_cycle,
+    'usage' => $usage,
+    'order_id' => $order_id,
+  );
+  drupal_alter('commerce_license_billing_estimation', $estimation, $context);
+
   return $estimation;
 }
 

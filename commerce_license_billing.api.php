@@ -40,3 +40,38 @@ function hook_commerce_license_billing_initial_usage($license, $group_name) {
     }
   }
 }
+
+/**
+ * Alter the estimated charges for a license.
+ *
+ * The estimated charges show how an imaginary recurring order would look
+ * like if it charged for the provided plan and usage.
+ * Each charge can be seen as an imaginary line item.
+ *
+ * This hook allows modules that do order-level pricing logic (adding a sales
+ * tax charge, for example), thus simulating a real order more closely.
+ *
+ * @param array $estimation
+ *   An array of estimated charges, with the following keys:
+ *   - total: The estimated total for all charges.
+ *   - charges: An array of charges with the following keys:
+ *     - product: The commerce_product entity for which the charge was generated.
+ *     - quantity: The quantity.
+ *     - unit_price: The unit price of the charge,
+ *     - total: The total price of a charge.
+ *   Each unit price or total is a commerce_price array struct.
+ * @param array $context
+ *   An array with the following keys:
+ *   - license: Stub license referencing the requested plan and the owner uid.
+ *   - billing_cycle: Stub billing cycle.
+ *   - usage: Expected usage (in the usage_group => quantity format), or NULL.
+ *   - order_id: The order_id used in the calculation process. This can be
+ *     the ID of an active recurring order, or the ID of a cart, or 0.
+ *
+ *   Note that while drupal_alter hooks normally take references, this function
+ *   should not be used to modify these entities as some of them
+ *   (license, billing cycle) are stubs.
+ */
+function hook_commerce_license_billing_estimation_alter(&$estimation, $context) {
+
+}
