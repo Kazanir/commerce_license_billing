@@ -433,14 +433,15 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
     );
     $env_product = commerce_product_load_by_sku('BILLING-TEST-ENV');
     // 7.50$ is the expected unit price because at this moment the environment
-    // usage is valid for 3/4 of the cycle, so it's 10$ * (3/4).
+    // usage is valid for 3/4 of the cycle, so it's 10$ * (3/4). Because the
+    // free quantity on this usage is 3, the expected charged qty is 1.
     $expected_charges[5] = array(
       'title' => 'environments usage product (postpaid, plan B)',
       'product_id' => $env_product->product_id,
       'commerce_unit_price' => array(
         'amount' => '750', // 7.50$
       ),
-      'quantity' => 4,
+      'quantity' => 1,
       'cl_billing_start' => $plan_durations[1][0],
       'cl_billing_end' => $this->billing_cycle->end,
     );

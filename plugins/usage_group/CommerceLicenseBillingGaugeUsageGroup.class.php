@@ -80,6 +80,9 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
       if ($usage_record['quantity'] <= $free_quantities[$revision_id]['quantity']) {
         unset($usage[$index]);
       }
+      else {
+        $usage[$index]['quantity'] -= $free_quantities[$revision_id]['quantity'];
+      }
     }
 
     return $usage;

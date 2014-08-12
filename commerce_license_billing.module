@@ -714,7 +714,9 @@ function commerce_license_billing_order_refresh($order) {
         $amount_changed = ($previous_price->amount->value() != $current_price->amount->value());
         $currency_changed = ($previous_price->currency_code->value() != $current_price->currency_code->value());
         $components_changed = ($data['components'] != $current_data['components']);
-        if ($amount_changed || $currency_changed || $components_changed) {
+        // The quantity can only change if the free usage issued by a product changes.
+        $quantity_changed = ($existing_line_item->quantity != $line_item->quantity);
+        if ($amount_changed || $currency_changed || $components_changed || $quantity_changed) {
           // Found a difference, save the updated line item.
           commerce_line_item_save($line_item);
           $order_changed = TRUE;
