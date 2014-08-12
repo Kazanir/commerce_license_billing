@@ -34,6 +34,19 @@ function commerce_license_billing_rules_condition_info() {
       'execute' => 'commerce_license_billing_order_elligible_condition',
     ),
   );
+  $conditions['commerce_license_billing_product_prorating_eligible'] = array(
+    'label' => t('Product is eligible for prorating'),
+    'parameter' => array(
+      'commerce_product' => array(
+        'type' => 'commerce_product',
+        'label' => t('Product'),
+      ),
+    ),
+    'group' => t('Commerce License Billing'),
+    'callbacks' => array(
+      'execute' => 'commerce_license_billing_product_prorating_eligible_condition',
+    ),
+  );
 
   return $conditions;
 }
@@ -113,6 +126,28 @@ function commerce_license_billing_order_elligible_condition($order) {
   }
 
   return FALSE;
+}
+
+/**
+ * Rules condition calback: check if a product is eligible for prorating.
+ *
+ * Postpaid plan products and usage products need to be prorated.
+ */
+function commerce_license_billing_product_prorating_eligible_condition($product) {
+  $eligible = FALSE;
+  // These products are missing the standard billing cycle fields or they are empty,
+  // meaning they are being used solely as usage products.
+  if (empty($product->cl_billing_cycle_type) || empty($product->cl_billing_type)) {
+    $eligible = TRUE;
+  }
+  else {
+    $wrapper = entity_metadata_wrapper('commerce_product', $product);
+    if ($wrapper->cl_billing_type->value() == 'postpaid') {
+      $eligible = TRUE;
+    }
+  }
+
+  return $eligible;
 }
 
 /**

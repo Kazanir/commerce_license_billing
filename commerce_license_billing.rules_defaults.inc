@@ -140,15 +140,11 @@ function commerce_license_billing_default_rules_configuration() {
         },
         { "entity_has_field" : { "entity" : [ "commerce-line-item" ], "field" : "commerce_product" } },
         { "entity_has_field" : {
-            "entity" : [ "commerce-line-item:commerce-product" ],
-            "field" : "cl_billing_type"
+            "entity" : [ "commerce-line-item:order" ],
+            "field" : "cl_billing_cycle"
           }
         },
-        { "NOT data_is" : {
-            "data" : [ "commerce-line-item:commerce-product:cl-billing-type" ],
-            "value" : "prepaid"
-          }
-        }
+        { "commerce_license_billing_product_prorating_eligible" : { "commerce_product" : [ "commerce-line-item:commerce-product" ] } }
       ],
       "DO" : [
         { "commerce_license_billing_prorate_recurring_line_item" : { "commerce_line_item" : [ "commerce_line_item" ] } }
