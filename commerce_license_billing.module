@@ -799,6 +799,11 @@ function commerce_license_billing_populate_line_item($line_item, $charge) {
   );
   $line_item_wrapper->cl_billing_start = $charge['cl_billing_start'];
   $line_item_wrapper->cl_billing_end = $charge['cl_billing_end'];
+  // Store the revision ID of the license used to generate the charge, if any.
+  if (!empty($charge['license_revision_id'])) {
+    $line_item->data['license_revision_id'] = $charge['license_revision_id'];
+  }
+
   // Trigger price calculation to get any needed discounts or price changes.
   rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
 }
@@ -843,6 +848,7 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
       $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
       $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
       $charges[] = array(
+        'license_revision_id' => $history_record['revision_id'],
         'quantity' => 1,
         'commerce_product' => $product_wrapper->value(),
         'commerce_unit_price' => $product_wrapper->commerce_price->value(),
@@ -866,6 +872,7 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
       $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
       $charges[] = array(
+        'license_revision_id' => $history_record['revision_id'],
         'quantity' => 1,
         'commerce_product' => $product,
         'commerce_unit_price' => $product_wrapper->commerce_price->value(),
@@ -887,6 +894,7 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
         $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
         $charges[] = array(
+          'license_revision_id' => $usage_record['revision_id'],
           'commerce_product' => $product,
           'quantity' => $usage_record['quantity'],
           'commerce_unit_price' => $product_wrapper->commerce_price->value(),
