@@ -75,3 +75,27 @@ function hook_commerce_license_billing_initial_usage($license, $group_name) {
 function hook_commerce_license_billing_estimation_alter(&$estimation, $context) {
 
 }
+
+/**
+ * Alter a newly created recurring order.
+ *
+ * Allows modules to transfer custom fields from the previous order to the
+ * new one.
+ *
+ * Note that licenses attached to the order can be fetched using
+ * commerce_license_billing_get_recurring_order_licenses($order).
+ *
+ * @param $recurring_order
+ *   The newly created recurring order.
+ * @param $previous_order
+ *   The previous order based on which the current one is generated.
+ *   This can be the initial non-recurring order or a recurring order for
+ *   the previous billing cycle.
+ */
+function hook_commerce_license_billing_new_recurring_order_alter($recurring_order, $previous_order) {
+  // We have a custom field_foo on our orders that needs to be retained on each
+  // subsequent recurring order.
+  if (isset($previous_order->field_foo)) {
+    $recurring_order->field_foo = $previous_order->field_foo;
+  }
+}
