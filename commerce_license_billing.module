@@ -540,13 +540,14 @@ function commerce_license_billing_generate_recurring_order($previous_order, $bil
   commerce_order_save($recurring_order);
 
   $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
-
   // We need to duplicate all fields which contain a customer profile.
   $recurring_order_properties = $recurring_order_wrapper->getPropertyInfo();
   $previous_order_properties = $previous_order_wrapper->getPropertyInfo();
-  foreach ($previous_order_properties as $fieldname => $info) {
-    if ($info['type'] == 'commerce_customer_profile' && $info['field'] == TRUE && in_array($fieldname, array_keys($recurring_order_properties))) {
-      $recurring_order_wrapper->{$fieldname} = $previous_order_wrapper->{$fieldname}->value();
+  foreach ($previous_order_properties as $field_name => $info) {
+    if (!empty($info['field']) && $info['type'] == 'commerce_customer_profile') {
+      if (in_array($field_name, array_keys($recurring_order_properties))) {
+        $recurring_order_wrapper->{$field_name} = $previous_order_wrapper->{$field_name}->value();
+      }
     }
   }
   $recurring_order_wrapper->cl_billing_cycle = $billing_cycle;
@@ -864,7 +865,7 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
       $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
       $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
       $charges[] = array(
-        'license_revision_id' => $history_record['revision_id'],
+        'license_revision_id' => $license->revision_id,
         'quantity' => 1,
         'commerce_product' => $product_wrapper->value(),
         'commerce_unit_price' => $product_wrapper->commerce_price->value(),
