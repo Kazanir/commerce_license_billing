@@ -8,6 +8,23 @@
 class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsageGroupBase {
 
   /**
+   * Overrides CommerceLicenseBillingUsageBase::addUsage().
+   */
+  public function addUsage($revisionId, $quantity, $start = NULL, $end = NULL) {
+    if (is_null($start)) {
+      // Default $start to current time.
+      $start = commerce_license_get_time();
+    }
+    if (is_null($end)) {
+      // Default $end to current time.
+      $end = commerce_license_get_time();
+    }
+
+    // Open the new usage.
+    parent::addUsage($revisionId, $quantity, $start, $end);
+  }
+
+  /**
    * Implements CommerceLicenseBillingUsageGroupInterface::currentUsage().
    */
   public function currentUsage($billingCycle = NULL) {
@@ -83,5 +100,18 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
     }
 
     return $chargeable_usage;
+  }
+
+  /**
+   * Implements CommerceLicenseBillingUsageGroupInterface::isComplete().
+   */
+  public function isComplete(CommerceLicenseBillingCycle $billingCycle) {
+    // Usage is reported right away, so it can always be considered complete.
+    if (!empty($this->groupInfo['immediate'])) {
+      return TRUE;
+    }
+    else {
+      return parent::isComplete($billingCycle);
+    }
   }
 }

@@ -31,13 +31,14 @@ interface CommerceLicenseBillingUsageInterface {
    *   For type 'counter' this means that the free quantity is subtracted
    *   from the total quantity. For type 'gauge' this means that the gauge
    *   values that equal free_quantity are ignored.
+   * - immediate: Whether usage changes are guaranteed to be reported right
+   *   away. If TRUE for a 'gauge', the usage is open-ended and will be carried
+   *   over into next billing cycles. If TRUE for a 'counter', the usage will
+   *   be considered complete for the billing cycle.
    * Optional keys for the 'gauge' type.
    * - not_charged: If TRUE, no charges for this usage group will be added to
    *   the order. Useful for use cases that require usage to be tracked, but
    *   where the charging happens through other methods (i.e. sublicenses).
-   * - immediate: Whether usage changes are guaranteed to be reported right
-   *   away. If TRUE, the usage is open-ended and will be carried over into next
-   *   billing cycles.
    * - initial_quantity: The initial quantity to register when opening the
    *   billing cycle. For example, if the user starts with 1 development
    *   environment, "initial_quantity" should be set to 1.
