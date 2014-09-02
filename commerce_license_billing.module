@@ -663,6 +663,14 @@ function commerce_license_billing_order_refresh($order) {
   $old_line_items = array();
   $old_line_item_ids = array();
   foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
+    // If this isn't a recurring line item, we need to make note of its ID so
+    // we can accurately compare our original and updated line item ID arrays
+    // at the end of the refresh process. The rest of the license-based logic
+    // does not apply.
+    if ($line_item_wrapper->getBundle() != 'recurring') {
+      $old_line_item_ids[] = $line_item_wrapper->line_item_id->value();
+      continue;
+    }
     // Gather all licenses that are in this order.
     $license_id = $line_item_wrapper->cl_billing_license->raw();
     if (!isset($licenses[$license_id])) {
@@ -674,14 +682,14 @@ function commerce_license_billing_order_refresh($order) {
     $old_line_item_ids[] = $line_item_wrapper->line_item_id->value();
   }
 
-  $order_changed = FALSE;
+  $order_needs_save = FALSE;
   // Remove any licenses that couldn't be loaded due to broken references.
   $old_license_count = count($licenses);
   $licenses = array_filter($licenses);
   $new_license_count = count($licenses);
   if ($old_license_count != $new_license_count) {
     // Resave the order to remove the line items that are no longer relevant.
-    $order_changed = TRUE;
+    $order_needs_save = TRUE;
   }
 
   $line_items = array();
@@ -711,7 +719,7 @@ function commerce_license_billing_order_refresh($order) {
         commerce_line_item_save($line_item);
 
         $line_items[$line_item->line_item_id] = $line_item;
-        $order_changed = TRUE;
+        $order_needs_save = TRUE;
       }
       else {
         // Update a copy of the line item.
@@ -734,7 +742,7 @@ function commerce_license_billing_order_refresh($order) {
         if ($amount_changed || $currency_changed || $components_changed || $quantity_changed) {
           // Found a difference, save the updated line item.
           commerce_line_item_save($line_item);
-          $order_changed = TRUE;
+          $order_needs_save = TRUE;
         }
 
         $line_items[$line_item->line_item_id] = $line_item;
@@ -742,19 +750,23 @@ function commerce_license_billing_order_refresh($order) {
     }
   }
 
+  // Allow other modules to alter the process, adding order-level discounts
+  // or fees for example. See commerce_license_billing.api.php for more info.
+  drupal_alter('commerce_license_billing_order_refresh', $order, $line_items, $order_needs_save);
+
   // One or more line items might have been dropped (for example, because a
   // prepaid license has been scheduled for cancellation).
   $new_line_item_ids = array_keys($line_items);
   $dropped_line_item_ids = array_diff($old_line_item_ids, $new_line_item_ids);
   if ($dropped_line_item_ids) {
     // Make sure to update the order line item list.
-    $order_changed = TRUE;
+    $order_needs_save = TRUE;
     // Delete dropped line items.
     commerce_line_item_delete_multiple($dropped_line_item_ids);
   }
 
   // Update the order, if new line items were created.
-  if ($order_changed) {
+  if ($order_needs_save) {
     if ($line_items) {
       $order_wrapper->commerce_line_items = array_values($line_items);
     }

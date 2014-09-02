@@ -99,3 +99,36 @@ function hook_commerce_license_billing_new_recurring_order_alter($recurring_orde
     $recurring_order->field_foo = $previous_order->field_foo;
   }
 }
+
+/**
+ * An entry point into the recurring order refresh process. Allows modules
+ * implementing order-level fees or discounts and other refresh-style logic
+ * to alter a open recurring order and its line items before it is saved.
+ *
+ * Please read this documentation carefully before implementing this hook.
+ *
+ * @param $order
+ *   The unchanged $order object which is being refreshed. Use this object to
+ *   access the original line items array as well as any other properties
+ *   or fields on the order.
+ * @param &$line_items
+ *   The proposed array of refreshed line items. After this hook runs, the IDs
+ *   of these line items are compared to the IDs of the original order and the
+ *   order will be updated and saved if any IDs are different or new.
+ * @param &$order_needs_save
+ *   A boolean indicating whether the $order needs to be updated for reasons
+ *   other than new line item IDs. Set this to TRUE if your implementation
+ *   alters an existing line item (without changing its ID) or otherwise
+ *   modifies the fields on an order.
+ *
+ *   Note that if the main refresh function has added new line item IDs, those
+ *   will be compared with the originals *after* this hook has run, and so this
+ *   indicator might not be set yet even if a license plan and its line items
+ *   have been changed in this refresh.
+ *
+ *   Modules that need to respond to a license plan or recurring order changing
+ *   should use hook_commerce_order_update instead.
+ */
+function hook_commerce_license_billing_order_refresh_alter($order, &$line_items, &$order_needs_save) {
+
+}
