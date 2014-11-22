@@ -923,7 +923,9 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
         $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
         $charges[] = array(
-          'license_revision_id' => $usage_record['revision_id'],
+          // Not all usage records supply the revision ID of the license, as
+          //   is it not always relevant.
+          'license_revision_id' => (isset($usage_record['revision_id']) ? $usage_record['revision_id'] : NULL),
           'commerce_product' => $product,
           'quantity' => $usage_record['quantity'],
           'commerce_unit_price' => $product_wrapper->commerce_price->value(),
