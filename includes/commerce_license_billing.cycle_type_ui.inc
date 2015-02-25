@@ -130,7 +130,7 @@ function commerce_license_billing_cycle_type_form($form, &$form_state, $billing_
       'exists' => 'commerce_license_billing_cycle_type_name_exists',
       'source' => array('title'),
     ),
-    '#disabled' => $is_new && $user->uid != 1,
+    '#disabled' => !$is_new && $user->uid != 1,
     '#weight' => -9,
   );
   // If bundleswitcher exists, it will provide the engine form element instead.
