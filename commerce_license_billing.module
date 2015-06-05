@@ -1020,6 +1020,7 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, $
       $usage_group = $usage_groups[$group_name];
       $usage_product = commerce_product_load_by_sku($usage_group['product']);
       if ($quantity <= $usage_group['free_quantity']) {
+        $quantity = 0;
         $unit_price = $total_price = $zero_price;
       }
       else {
