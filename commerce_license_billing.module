@@ -293,6 +293,10 @@ function commerce_license_billing_advanced_queue_info() {
       'retry after' => 86400,
       'max attempts' => 5,
     ),
+    'commerce_license_billing_order_refresh' => array(
+      'worker callback' => 'commerce_license_billing_order_refresh_queue_process',
+      'max attempts' => 1,
+    ),
   );
 }
 
@@ -624,6 +628,29 @@ function commerce_license_billing_generate_base_line_item(CommerceLicenseInterfa
 }
 
 /**
+ * Queue worker to refresh orders which are too gnarly to be refreshed during a
+ * web request.
+ */
+function commerce_license_billing_order_refresh_queue_process($item) {
+  // Our $item->data contains the order ID, but if we load it straight off, it
+  // will go through the normal order load hook and create a new queue item. We
+  // engage in severe hackery to prevent this:
+  $already_refreshed_cheat = &drupal_static('commerce_license_billing_commerce_order_load', array());
+  $order_id = $item->data['order_id'];
+  $already_refreshed_cheat[$order_id] = TRUE;
+  // This will cause the hook (including the queue-me logic) to be entirely
+  // skipped. Now we can load safely:
+  $order = commerce_order_load($order_id);
+  $queue_refresh_timer = variable_get('commerce_license_billing_refresh_queue_timer', 600);
+  $last_refreshed = (!empty($order->data['last_refreshed']) ? $order->data['last_refreshed'] : 0);
+  if ((commerce_license_get_time() - $last_refreshed) > $queue_refresh_timer) {
+    commerce_license_billing_order_refresh($order, commerce_license_get_time());
+  }
+
+  return TRUE;
+}
+
+/**
  * Implements hook_commerce_order_load().
  *
  * When a recurring order gets loaded, update its line items based on latest
@@ -633,13 +660,50 @@ function commerce_license_billing_generate_base_line_item(CommerceLicenseInterfa
 function commerce_license_billing_commerce_order_load($orders) {
   $refreshed = &drupal_static(__FUNCTION__, array());
   $recurring_statuses = array('recurring_open', 'recurring_usage_pending');
+  $use_refresh_queue = variable_get('commerce_license_billing_refresh_queue', TRUE);
+  $max_line_items = variable_get('commerce_license_billing_refresh_max_size', NULL);
+  if ($use_refresh_queue) {
+    $queue = DrupalQueue::get('commerce_license_billing_order_refresh');
+    $queue_refresh_timer = variable_get('commerce_license_billing_refresh_queue_timer', 600);
+  }
 
   foreach ($orders as $order) {
     // Refresh only if this is a recurring order and it hasn't been refreshed.
     if (!isset($refreshed[$order->order_id]) && $order->type == 'recurring' && in_array($order->status, $recurring_statuses)) {
-      // Refresh the order and add its ID to the refreshed array.
-      $refreshed[$order->order_id] = TRUE;
-      commerce_license_billing_order_refresh($order);
+      // There are other ways for an order to not be refreshed.
+      $refresh = TRUE;
+      // If an order's current number of line items exceeds the "max size"
+      // variable, it is not refreshed.
+      if (!is_null($max_line_items) && !empty($order->commerce_line_items[LANGUAGE_NONE]) && (count($order->commerce_line_items[LANGUAGE_NONE]) >= $max_line_items)) {
+        $refresh = FALSE;
+      }
+      else {
+        // Give other modules the opportunity to intervene. Returning FALSE
+        // results in no refresh.
+        foreach (module_implements('commerce_license_billing_refresh_deny') as $module) {
+          $fn = $module . '_commerce_license_billing_refresh_deny';
+          $result = call_user_func($fn, $order);
+          // Any exact FALSE return will make $refresh FALSE forever.
+          $refresh = $refresh && !($result === FALSE);
+        }
+      }
+
+      if ($refresh) {
+        // Refresh the order and add its ID to the refreshed array.
+        $refreshed[$order->order_id] = TRUE;
+        commerce_license_billing_order_refresh($order);
+      }
+      elseif ($use_refresh_queue) {
+        $last_refreshed = (!empty($order->data['last_refreshed']) ? $order->data['last_refreshed'] : 0);
+        if ((commerce_license_get_time() - $last_refreshed) > $queue_refresh_timer) {
+          // Queue a refresh. The refresh queue job disables this hook by
+          // accessing its drupal_static array externally so that we avoid an
+          // infinite loop of queue items.
+          $data['order_id'] = $order->order_id;
+          $data['title'] = "Refresh order #$order->order_id";
+          $queue->createItem($data);
+        }
+      }
     }
   }
 }
@@ -650,7 +714,7 @@ function commerce_license_billing_commerce_order_load($orders) {
  * @param $order
  *   The order entity.
  */
-function commerce_license_billing_order_refresh($order) {
+function commerce_license_billing_order_refresh($order, $set_refresh_timer = FALSE) {
   // The first time an order is saved, entity_load_unchanged() in the controller
   // leads to this function being called, with no line items to work on.
   if (empty($order->commerce_line_items)) {
@@ -763,6 +827,13 @@ function commerce_license_billing_order_refresh($order) {
     $order_needs_save = TRUE;
     // Delete dropped line items.
     commerce_line_item_delete_multiple($dropped_line_item_ids);
+  }
+
+  // If we're using timed, queued refreshes, the queue will have passed a
+  // special argument to this function.
+  if ($set_refresh_timer) {
+    $order->data['last_refreshed'] = $set_refresh_timer;
+    $order_needs_save = TRUE;
   }
 
   // Update the order, if new line items were created.
