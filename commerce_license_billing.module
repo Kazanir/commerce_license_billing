@@ -761,6 +761,11 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
   // Instead we can get them into the controller's static cache right away:
   commerce_line_item_load_multiple($order_wrapper->commerce_line_items->raw());
   foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
+    // Guard against empty line items.
+    if (!$line_item_wrapper->getIdentifier()) {
+      watchdog('commerce_license_billing', 'Empty line item found in order @id', array('@id' => $order->order_id), WATCHDOG_WARNING);
+      continue;
+    }
     // If this isn't a recurring line item, we need to make note of its ID so
     // we can accurately compare our original and updated line item ID arrays
     // at the end of the refresh process. The rest of the license-based logic
