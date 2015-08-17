@@ -204,6 +204,10 @@ function commerce_license_billing_prorate_line_item($line_item_wrapper, $duratio
   $unit_price = commerce_price_wrapper_value($line_item_wrapper, 'commerce_unit_price', TRUE);
   if ($unit_price['amount'] > 0) {
     $billing_cycle_duration = $billing_cycle->end - $billing_cycle->start;
+    if ($billing_cycle_duration == $duration) {
+      // If the durations are the same, there is no need to do the extra math.
+      return;
+    }
     $prorated_amount = $unit_price['amount'] * ($duration / $billing_cycle_duration);
     $prorated_amount = round($prorated_amount);
 
