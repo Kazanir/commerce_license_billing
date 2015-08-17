@@ -620,7 +620,7 @@ function commerce_license_billing_generate_base_line_item(CommerceLicenseInterfa
     $line_item_wrapper->cl_billing_end = $billing_cycle->end;
   }
   // Trigger price calculation to get any needed discounts or price changes.
-  rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
+  commerce_license_billing_invoke_pricing_event($line_item);
   // Save the line item.
   $line_item_wrapper->save();
 
@@ -648,6 +648,35 @@ function commerce_license_billing_order_refresh_queue_process($item) {
   }
 
   return TRUE;
+}
+
+/**
+ * Adds the ability to override the standard product pricing mechanism for
+ * recurring line items. By default, this function wraps a rules invocation of
+ * commerce_product_calculate_sell_price (the default) but allows users to
+ * substitute an event name of their choice and invoke either rules, hooks, or
+ * both for this event.
+ *
+ * @param $line_item
+ */
+function commerce_license_billing_invoke_pricing_event($line_item) {
+  $event = variable_get('commerce_license_billing_recurring_pricing_event', 'commerce_product_calculate_sell_price');
+  $type = variable_get('commerce_license_billing_recurring_pricing_mode', 'rules');
+
+  switch ($type) {
+  case "rules":
+    $invoke = 'rules_invoke_event';
+    break;
+  case "hook":
+    $invoke = 'module_invoke_all';
+    break;
+  case "both":
+    $invoke = 'rules_invoke_all';
+    break;
+  }
+
+  // Invoke the chosen event in the chosen way.
+  $invoke($event, $line_item);
 }
 
 /**
@@ -905,7 +934,7 @@ function commerce_license_billing_populate_line_item($line_item, $charge) {
   }
 
   // Trigger price calculation to get any needed discounts or price changes.
-  rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
+  commerce_license_billing_invoke_pricing_event($line_item);
 }
 
 /**
@@ -1160,7 +1189,7 @@ function commerce_license_billing_calculate_sell_price($order_id, $product, $qua
   $line_item_wrapper->quantity = $quantity;
   commerce_product_line_item_populate($line_item, $product);
   // Pass the line item to Rules.
-  rules_invoke_event('commerce_product_calculate_sell_price', $line_item);
+  commerce_license_billing_invoke_pricing_event($line_item);
   // Get the calculated unit price. If it was unset, provide a default.
   $unit_price = $line_item_wrapper->commerce_unit_price->value();
   if (empty($unit_price)) {
