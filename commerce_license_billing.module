@@ -610,14 +610,17 @@ function commerce_license_billing_generate_base_line_item(CommerceLicenseInterfa
     // the line item needs to charge for March.
     $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
     $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
-    $line_item_wrapper->cl_billing_start = $next_billing_cycle->start;
-    $line_item_wrapper->cl_billing_end = $next_billing_cycle->end;
+    // The entity metadata wrapper's date calls are extremely slow, so we set
+    // the field values directly here since this can be called very frequently
+    // during an order refresh.
+    $line_item->cl_billing_start[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $next_billing_cycle->start);
+    $line_item->cl_billing_end[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $next_billing_cycle->end);
   }
   elseif ($product_wrapper->cl_billing_type->value() == 'postpaid') {
     // In case of postpaid, the line item always charges for the current
     // billing cycle.
-    $line_item_wrapper->cl_billing_start = $billing_cycle->start;
-    $line_item_wrapper->cl_billing_end = $billing_cycle->end;
+    $line_item->cl_billing_start[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $billing_cycle->start);
+    $line_item->cl_billing_end[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $billing_cycle->end);
   }
   // Trigger price calculation to get any needed discounts or price changes.
   commerce_license_billing_invoke_pricing_event($line_item);
@@ -936,8 +939,8 @@ function commerce_license_billing_populate_line_item($line_item, $charge) {
       $line_item_wrapper->commerce_unit_price->value(),
       TRUE
   );
-  $line_item_wrapper->cl_billing_start = $charge['cl_billing_start'];
-  $line_item_wrapper->cl_billing_end = $charge['cl_billing_end'];
+  $line_item->cl_billing_start[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $charge['cl_billing_start']);
+  $line_item->cl_billing_end[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $charge['cl_billing_end']);
   // Store the revision ID of the license used to generate the charge, if any.
   if (!empty($charge['license_revision_id'])) {
     $line_item->data['license_revision_id'] = $charge['license_revision_id'];
@@ -1194,8 +1197,8 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, $
 function commerce_license_billing_calculate_sell_price($order_id, $product, $quantity, $billing_cycle) {
   $line_item = commerce_line_item_new('recurring', $order_id);
   $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-  $line_item_wrapper->cl_billing_start = $billing_cycle->start;
-  $line_item_wrapper->cl_billing_end = $billing_cycle->end;
+  $line_item->cl_billing_start[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $billing_cycle->start);
+  $line_item->cl_billing_end[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $billing_cycle->end);
   $line_item_wrapper->quantity = $quantity;
   commerce_product_line_item_populate($line_item, $product);
   // Pass the line item to Rules.
