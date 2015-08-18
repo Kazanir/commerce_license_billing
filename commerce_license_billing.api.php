@@ -132,3 +132,22 @@ function hook_commerce_license_billing_new_recurring_order_alter($recurring_orde
 function hook_commerce_license_billing_order_refresh_alter($order, &$line_items, &$order_needs_save) {
 
 }
+
+/**
+ * Allows modules to intervene and prevent an order from being refreshed during
+ * a web request. (By default, orders whose refresh is "denied" in this way
+ * have a refresh queued via AdvancedQueue. See the drupal.org documentation
+ * page for details.
+ *
+ * @param $order
+ *   The order object which is being loaded and refreshed.
+ *
+ * @return (bool)
+ *   In order to deny an order from being refreshed, return FALSE from your
+ *   implementation of this hook. This is strictly checked: Only (bool) FALSE
+ *   will cause the order refresh to be skipped.
+ */
+function hook_commerce_license_billing_refresh_deny($order) {
+
+}
+
