@@ -1488,16 +1488,23 @@ function commerce_license_billing_plan_history_list(CommerceLicenseInterface $li
       ':start' => $billing_cycle->start,
       ':end' => $billing_cycle->end,
     );
-    // Fetch revisions that started or ended in this billing cycle, or are still
-    // in progress.
+    // Fetch revisions that partake in this billing cycle. The SQL below
+    // encompasses 5 possibilities:
+    //
+    // 1. The revision starts and ends within this cycle.
+    // 2. The revision starts within this cycle, and ends after it.
+    // 3. The revision starts before this cycle, but ends within it.
+    // 4. The revision starts before this cycle, and ends after it.
+    // 5. The revision starts within this cycle, and has no end date.
     $result = db_query("SELECT revision_id, product_id, status,
                           revision_created AS start, revision_ended AS end
                           FROM {commerce_license_revision}
                           WHERE license_id = :license_id
                               AND (
-                                (revision_created BETWEEN :start AND :end) OR
-                                (revision_ended BETWEEN :start AND :end) OR
-                                (revision_ended = 0)
+                                (revision_created < :end) AND (
+                                  (revision_ended > :start) OR
+                                  (revision_ended = 0)
+                                )
                               )", $data);
     $license_history = $result->fetchAll(PDO::FETCH_ASSOC);
 
@@ -1551,14 +1558,15 @@ function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsage
       ':start' => $billing_cycle->start,
       ':end' => $billing_cycle->end,
     );
-    // Fetch usage records that started or ended in this billing cycle, or are
-    // still in progress.
+    // Fetch usage records that partake in this billing cycle. See
+    // commerce_license_billing_plan_history_list for details.
     $result = db_query("SELECT * FROM {cl_billing_usage}
                           WHERE license_id = :license_id
                               AND (
-                                (start BETWEEN :start AND :end) OR
-                                (end BETWEEN :start AND :end) OR
-                                (end = 0)
+                                (start < :end) AND (
+                                  (end > :start) OR
+                                  (end = 0)
+                                )
                               )
                           ORDER BY start ASC", $data);
     $usage_history = $result->fetchAll(PDO::FETCH_ASSOC);
