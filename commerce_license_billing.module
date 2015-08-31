@@ -1488,7 +1488,7 @@ function commerce_license_billing_plan_history_list(CommerceLicenseInterface $li
       ':start' => $billing_cycle->start,
       ':end' => $billing_cycle->end,
     );
-    // Fetch revisions that partake in this billing cycle. The SQL below
+    // Fetch revisions that overlap with this billing cycle. The SQL below
     // encompasses 5 possibilities:
     //
     // 1. The revision starts and ends within this cycle.
@@ -1558,7 +1558,7 @@ function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsage
       ':start' => $billing_cycle->start,
       ':end' => $billing_cycle->end,
     );
-    // Fetch usage records that partake in this billing cycle. See
+    // Fetch usage records that overlap this billing cycle. See
     // commerce_license_billing_plan_history_list for details.
     $result = db_query("SELECT * FROM {cl_billing_usage}
                           WHERE license_id = :license_id
