@@ -1222,22 +1222,29 @@ function commerce_license_billing_calculate_sell_price($order_id, $product, $qua
  *   A billing cycle entity, or FALSE if none found.
  */
 function commerce_license_billing_get_license_billing_cycle(CommerceLicenseInterface $license) {
-  // Load a line item that references the license.
-  $query = new EntityFieldQuery;
-  $query
-    ->entityCondition('entity_type', 'commerce_line_item')
-    ->entityCondition('bundle', 'recurring')
-    ->fieldCondition('cl_billing_license', 'target_id', $license->license_id)
-    ->range(0, 1);
+  // We construct a query that:
+  // a. Gets all orders which contain line items referencing this license
+  // b. Gets the associated billing cycles for those orders
+  $query = db_select('commerce_order', 'co');
+  // This is part a. We can't use EFQ here because it can't do entity reference joins in D7.
+  $query->join('field_data_commerce_line_items', 'fcli', "co.order_id = fcli.entity_id AND fcli.entity_type = 'commerce_order'");
+  $query->join('commerce_line_item', 'cli', "fcli.commerce_line_items_line_item_id = cli.line_item_id");
+  $query->join('field_data_cl_billing_license', 'fcbl', "cli.line_item_id = fcbl.entity_id AND fcbl.entity_type = 'commerce_line_item'");
+  $query->condition('fcbl.cl_billing_license_target_id', $license->license_id, '=');
+  // This is part b. This lets us get to the billing cycle in the same query.
+  $query->join('field_data_cl_billing_cycle', 'fcbc', "co.order_id = fcbc.entity_id AND fcbc.entity_type = 'commerce_order'");
+  $query->join('cl_billing_cycle', 'cbc', "fcbc.cl_billing_cycle_target_id = cbc.billing_cycle_id");
+  $query->isNotNull('cbc.billing_cycle_id');
+  $query->orderBy('cbc.start', 'DESC');
+  $query->range(0, 1);
+  $query->addField('cbc', 'billing_cycle_id');
+
   $result = $query->execute();
-  if ($result) {
-    $line_item_id = key($result['commerce_line_item']);
-    $line_item = commerce_line_item_load($line_item_id);
-    $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-    return $line_item_wrapper->order->cl_billing_cycle->value();
+  if (!$result || !($billing_cycle_id = $result->fetchColumn())) {
+    return FALSE;
   }
   else {
-    return FALSE;
+    return entity_load_single('cl_billing_cycle', $billing_cycle_id);
   }
 }
 
