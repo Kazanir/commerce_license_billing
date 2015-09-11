@@ -935,11 +935,20 @@ function commerce_license_billing_populate_line_item($line_item, $charge) {
   $line_item_wrapper->commerce_product = $charge['commerce_product'];
   $line_item_wrapper->quantity = $charge['quantity'];
   $line_item_wrapper->commerce_unit_price = $charge['commerce_unit_price'];
+  // We strip out price and product details, and retain the rest of the info on
+  // the price component.
+  $base_component = $line_item_wrapper->commerce_unit_price->value();
+  unset($charge['commerce_product'], $charge['commerce_unit_price']);
+  $base_component['data'] = array(
+    'charge' => $charge,
+  );
+
+
   $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add(
     $line_item_wrapper->commerce_unit_price->value(),
-      'base_price',
-      $line_item_wrapper->commerce_unit_price->value(),
-      TRUE
+    'base_price',
+    $base_component,
+    TRUE
   );
   $line_item->cl_billing_start[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $charge['cl_billing_start']);
   $line_item->cl_billing_end[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $charge['cl_billing_end']);
@@ -1047,6 +1056,7 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
           'cl_billing_start' => $usage_record['start'],
           'cl_billing_end' => $usage_record['end'],
           'match' => array('commerce_product', 'cl_billing_start'),
+          'usage_group' => $usage_record['usage_group'],
         );
       }
     }
