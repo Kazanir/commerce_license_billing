@@ -68,24 +68,16 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
   }
 
   /**
-   * Returns the user's billing cycle with the provided start time.
+   * Returns the normalized start and end timestamp of the billing cycle.
    *
-   * If an existing billing cycle matches the expected start and end, it will
-   * be returned. Otherwise, a new one will be created.
+   * @param int $start
+   *   The relative start time to calculate from.
    *
-   * @param $uid
-   *   The uid of the user.
-   * @param $start
-   *   The unix timestamp when the billing cycle needs to start.
-   * @param $save
-   *   Whether to save the created billing cycle entity.
-   *   Passing FALSE allows an unsaved billing cycle entity to be returned
-   *   for estimation purposes.
-   *
-   * @return
-   *   A cl_billing_cycle entity.
+   * @return int[]
+   *   An array of UNIX timestamps, keyed by 'start' and 'end', representing the
+   *   start and end timestamps of the billing cycle respectively.
    */
-  public function getBillingCycle($uid, $start = REQUEST_TIME, $save = TRUE) {
+  public function getTimes($start = REQUEST_TIME) {
     $period = $this->wrapper->pce_period->value();
     if (!$this->wrapper->pce_async->value()) {
       // This is a synchronous billing cycle, normalize the start timestamp.
@@ -151,6 +143,30 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
     // the next one starts (January 31st 23:59:59, for instance, with the
     // next one starting on February 1st 00:00:00).
     $end = strtotime($period_mapping[$period], $start) - 1;
+
+    return array('start' => $start, 'end' => $end);
+  }
+
+  /**
+   * Returns the user's billing cycle with the provided start time.
+   *
+   * If an existing billing cycle matches the expected start and end, it will
+   * be returned. Otherwise, a new one will be created.
+   *
+   * @param $uid
+   *   The uid of the user.
+   * @param $start
+   *   The unix timestamp when the billing cycle needs to start.
+   * @param $save
+   *   Whether to save the created billing cycle entity.
+   *   Passing FALSE allows an unsaved billing cycle entity to be returned
+   *   for estimation purposes.
+   *
+   * @return
+   *   A cl_billing_cycle entity.
+   */
+  public function getBillingCycle($uid, $start = REQUEST_TIME, $save = TRUE) {
+    list($start, $end) = $this->getTimes($start);
 
     // Try to find an existing billing cycle matching our parameters.
     $query = new EntityFieldQuery;
