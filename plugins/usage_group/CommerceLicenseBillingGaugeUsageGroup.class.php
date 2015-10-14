@@ -150,7 +150,10 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
                               AND license_id = :license_id
                                 ORDER BY usage_id DESC
                                   LIMIT 1', $data);
-      $previous_quantity = $query->fetchField();
+      // If there is no previous usage quantity (for some reason) then we need
+      // to default to 0 -- we can't send FALSE to addUsage because it will be
+      // parametrized as '' and break the db_insert.
+      $previous_quantity = ($query->fetchField() ?: 0);
       $this->addUsage($this->license->revision_id, $previous_quantity, $current_time);
     }
   }

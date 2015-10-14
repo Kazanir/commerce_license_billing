@@ -404,7 +404,7 @@ function commerce_license_billing_cycle_close_queue_process($item) {
     commerce_order_save($order);
     // Clean-up usage unless this is toggled off by the user.
     $license_ids = array_keys($licenses);
-    if (variable_get('commerce_license_billing_usage_history_cleanup', TRUE)) {
+    if (variable_get('commerce_license_billing_usage_history_cleanup', FALSE)) {
       commerce_license_billing_usage_history_clear($license_ids, $billing_cycle);
     }
 
