@@ -402,7 +402,7 @@ function commerce_license_billing_cycle_close_queue_process($item) {
   if ($can_close_order) {
     $order->status = 'recurring_payment_pending';
     commerce_order_save($order);
-    // Clean-up usage unless this is toggled off by the user.
+    // Clean-up usage only if this is specifically enabled by the site.
     $license_ids = array_keys($licenses);
     if (variable_get('commerce_license_billing_usage_history_cleanup', FALSE)) {
       commerce_license_billing_usage_history_clear($license_ids, $billing_cycle);
