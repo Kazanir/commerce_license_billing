@@ -386,6 +386,8 @@ function commerce_license_billing_cycle_close_queue_process($item) {
   // Gather licenses and check if the order can be closed as well.
   $can_close_order = TRUE;
   $licenses = commerce_license_billing_get_recurring_order_licenses($order);
+  $previous_pending = !empty($order->data['usage_pending']) ? $order->data['usage_pending'] : array();
+  unset($order->data['usage_pending']);
   foreach ($licenses as $license) {
     if ($license instanceof CommerceLicenseBillingUsageInterface) {
       // Ensure each usage group has the complete usage records.
@@ -393,6 +395,8 @@ function commerce_license_billing_cycle_close_queue_process($item) {
         $usage_group = commerce_license_billing_usage_group($license, $group_name);
         if (!$usage_group->isComplete($billing_cycle)) {
           $can_close_order = FALSE;
+          // Take notes on which usage groups are missing for which licenses.
+          $order->data['usage_pending'][$license->license_id][] = $group_name;
           break;
         }
       }
@@ -414,7 +418,7 @@ function commerce_license_billing_cycle_close_queue_process($item) {
     );
   }
   else {
-    if ($order->status != 'recurring_usage_pending') {
+    if (($order->status != 'recurring_usage_pending') || ($order->data['usage_pending'] != $previous_pending)) {
       $order->status = 'recurring_usage_pending';
       commerce_order_save($order);
     }
