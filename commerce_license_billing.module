@@ -511,22 +511,7 @@ function commerce_license_billing_create_recurring_orders($order) {
       $license->save();
     }
 
-    // Check if there's an existing order attached to that billing cycle.
-    $recurring_order = $billing_cycle->getOrder();
-    if ($recurring_order) {
-      $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
-      // Generate a base line item for each license.
-      $existing_line_items = $recurring_order_wrapper->commerce_line_items->value();
-      $line_items = array();
-      foreach ($licenses as $license) {
-        $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order->order_id);
-      }
-      $recurring_order_wrapper->commerce_line_items = array_merge($existing_line_items, $line_items);
-      $recurring_order_wrapper->save();
-    }
-    else {
-      commerce_license_billing_generate_recurring_order($order, $billing_cycle, $licenses);
-    }
+    commerce_license_billing_generate_recurring_order($order, $billing_cycle, $licenses);
   }
 }
 
@@ -544,34 +529,42 @@ function commerce_license_billing_create_recurring_orders($order) {
  *   The newly created and saved recurring order.
  */
 function commerce_license_billing_generate_recurring_order($previous_order, $billing_cycle, $licenses) {
+  $recurring_order = $billing_cycle->getOrder();
   $previous_order_wrapper = entity_metadata_wrapper('commerce_order', $previous_order);
-  // Create a new order and save it immediately to get the order_id.
-  $recurring_order = commerce_order_new($previous_order->uid, 'recurring_open', 'recurring');
-  commerce_order_save($recurring_order);
 
-  $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
-  // We need to duplicate all fields which contain a customer profile.
-  $recurring_order_properties = $recurring_order_wrapper->getPropertyInfo();
-  $previous_order_properties = $previous_order_wrapper->getPropertyInfo();
-  foreach ($previous_order_properties as $field_name => $info) {
-    if (!empty($info['field']) && $info['type'] == 'commerce_customer_profile') {
-      if (in_array($field_name, array_keys($recurring_order_properties))) {
-        $recurring_order_wrapper->{$field_name} = $previous_order_wrapper->{$field_name}->value();
+  if (!$recurring_order) {
+    // Create a new order and save it immediately to get the order_id.
+    $recurring_order = commerce_order_new($previous_order->uid, 'recurring_open', 'recurring');
+    commerce_order_save($recurring_order);
+
+    $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
+    // We need to duplicate all fields which contain a customer profile.
+    $recurring_order_properties = $recurring_order_wrapper->getPropertyInfo();
+    $previous_order_properties = $previous_order_wrapper->getPropertyInfo();
+    foreach ($previous_order_properties as $field_name => $info) {
+      if (!empty($info['field']) && $info['type'] == 'commerce_customer_profile') {
+        if (in_array($field_name, array_keys($recurring_order_properties))) {
+          $recurring_order_wrapper->{$field_name} = $previous_order_wrapper->{$field_name}->value();
+        }
       }
     }
+    $recurring_order_wrapper->cl_billing_cycle = $billing_cycle;
+    // Allow modules to alter the newly generated order, carrying over custom
+    // fields from the previous order, for example.
+    drupal_alter('commerce_license_billing_new_recurring_order', $recurring_order, $previous_order);
   }
-  $recurring_order_wrapper->cl_billing_cycle = $billing_cycle;
+  else {
+    $recurring_order_wrapper = entity_metadata_wrapper('commerce_order', $recurring_order);
+  }
 
   // Generate a base line item for each license.
+  $existing_line_items = $recurring_order_wrapper->commerce_line_items->value();
+
   $line_items = array();
   foreach ($licenses as $license) {
     $line_items[] = commerce_license_billing_generate_base_line_item($license, $billing_cycle, $recurring_order->order_id);
   }
-  $recurring_order_wrapper->commerce_line_items = $line_items;
-
-  // Allow modules to alter the newly generated order, carrying over custom
-  // fields from the previous order, for example.
-  drupal_alter('commerce_license_billing_new_recurring_order', $recurring_order, $previous_order);
+  $recurring_order_wrapper->commerce_line_items = array_merge($existing_line_items, $line_items);
 
   $recurring_order_wrapper->save();
 
