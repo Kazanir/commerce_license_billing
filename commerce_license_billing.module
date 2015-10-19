@@ -739,6 +739,9 @@ function commerce_license_billing_commerce_order_load($orders) {
           // infinite loop of queue items.
           $data['order_id'] = $order->order_id;
           $data['title'] = "Refresh order #$order->order_id";
+          // We delay the execution of this item until after this request has
+          // safely finished.
+          $data['start_time'] = REQUEST_TIME + 15;
           $queue->createItem($data);
         }
       }
