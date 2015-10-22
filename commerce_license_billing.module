@@ -764,11 +764,15 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
   // We are about to iterate over all line items. This means that lazy-loading
   // them one-by-one is extremely inefficient from a performance perspective.
   // Instead we can get them into the controller's static cache right away:
-  commerce_line_item_load_multiple($order_wrapper->commerce_line_items->raw());
+  $line_items = commerce_line_item_load_multiple($order_wrapper->commerce_line_items->raw());
   foreach ($order_wrapper->commerce_line_items as $line_item_wrapper) {
+    $line_item_id = $line_item_wrapper->getIdentifier();
     // Guard against empty line items.
-    if (!$line_item_wrapper->getIdentifier()) {
-      watchdog('commerce_license_billing', 'Empty line item found in order @id', array('@id' => $order->order_id), WATCHDOG_WARNING);
+    if (!$line_item_id || !isset($line_items[$line_item_id])) {
+      watchdog('commerce_license_billing', 'Empty or nonexistent line item @line_item_id found in order @order_id', array(
+        '@line_item_id' => $line_item_id,
+        '@order_id' => $order->order_id,
+      ), WATCHDOG_WARNING);
       continue;
     }
     // If this isn't a recurring line item, we need to make note of its ID so
@@ -776,7 +780,7 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
     // at the end of the refresh process. The rest of the license-based logic
     // does not apply.
     if ($line_item_wrapper->getBundle() != 'recurring') {
-      $old_line_item_ids[] = $line_item_wrapper->line_item_id->value();
+      $old_line_item_ids[] = $line_item_id;
       continue;
     }
     // Gather all licenses that are in this order.
@@ -787,7 +791,7 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
 
     // Group the old line items by their license id.
     $old_line_items[$license_id][] = $line_item_wrapper;
-    $old_line_item_ids[] = $line_item_wrapper->line_item_id->value();
+    $old_line_item_ids[] = $line_item_id;
   }
 
   $order_needs_save = FALSE;
