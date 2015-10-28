@@ -623,7 +623,7 @@ class CommerceLicenseBillingTestCase extends CommerceBaseTestCase {
         if ($license->expires != $new_billing_cycle->end) {
           $licenses_renewed = FALSE;
         }
-        $bandwidth_usage = commerce_license_billing_usage_group($license, 'bandwidth')->currentUsage($this->billing_cycle);
+        $bandwidth_usage = commerce_license_billing_usage_group($license, 'bandwidth')->currentUsage($new_billing_cycle);
         if ($bandwidth_usage != 0) {
           $bandwidth_usage_reset = FALSE;
         }
