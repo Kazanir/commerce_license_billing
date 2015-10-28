@@ -1726,6 +1726,7 @@ function commerce_license_billing_configure_product_types($types) {
         'entity_type' => 'commerce_product',
         'bundle' => $new_bundle,
         'label' => 'License billing cycle type',
+        'description' => 'Note: Choosing a billing cycle type will cause licenses to be attached to a recurring billing cycle at checkout. The duration of the billing cycle and its renewal process will pre-empt the default expiration behavior of the license.',
         'required' => FALSE,
         'widget' => array(
           'type' => 'options_select',
