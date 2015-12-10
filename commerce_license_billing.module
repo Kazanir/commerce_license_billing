@@ -1549,7 +1549,7 @@ function commerce_license_billing_plan_history_list(CommerceLicenseInterface $li
       if ($history_record['start'] < $billing_cycle->start) {
         $license_history[$index]['start'] = $billing_cycle->start;
       }
-      if (empty($history_record['end'])) {
+      if (empty($history_record['end']) || ($history_record['end'] > $billing_cycle->end)) {
         $license_history[$index]['end'] = $billing_cycle->end;
       }
       // Load the referenced revision.
