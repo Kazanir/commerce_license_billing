@@ -1608,7 +1608,7 @@ function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsage
       if ($usage_record['start'] < $billing_cycle->start) {
         $usage_record['start'] = $billing_cycle->start;
       }
-      if (empty($usage_record['end'])) {
+      if (empty($usage_record['end']) || ($usage_record['end'] > $billing_cycle->end)) {
         $usage_record['end'] = $billing_cycle->end;
       }
       // Group the records by usage group.
