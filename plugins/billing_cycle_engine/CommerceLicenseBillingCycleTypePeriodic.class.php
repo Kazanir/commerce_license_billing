@@ -88,6 +88,10 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
   public function getBillingCycle($uid, $start = REQUEST_TIME, $save = TRUE) {
     $period = $this->wrapper->pce_period->value();
     if (!$this->wrapper->pce_async->value()) {
+      // Make sure to use the site's timezone as the PHP timezone for the
+      // creation of synchronous billing cycles.
+      date_default_timezone_set(variable_get('date_default_timezone', 'UTC'));
+
       // This is a synchronous billing cycle, normalize the start timestamp.
       switch ($period) {
         case 'hour':
@@ -151,6 +155,9 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
     // the next one starts (January 31st 23:59:59, for instance, with the
     // next one starting on February 1st 00:00:00).
     $end = strtotime($period_mapping[$period], $start) - 1;
+
+    // Set the timezone back to the user, mimicking the code in session.inc
+    date_default_timezone_set(drupal_get_user_timezone());
 
     // Try to find an existing billing cycle matching our parameters.
     $query = new EntityFieldQuery;
