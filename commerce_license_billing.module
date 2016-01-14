@@ -86,6 +86,7 @@ function commerce_license_billing_entity_info() {
     'module' => 'commerce_license_billing',
     'base table' => 'cl_billing_cycle',
     'entity class' => 'CommerceLicenseBillingCycle',
+    'access callback' => 'commerce_license_billing_cycle_access',
     'controller class' => 'EntityAPIController',
     'metadata controller class' => 'CommerceLicenseBillingCycleMetadataController',
     'label callback' => 'entity_class_label',
@@ -169,6 +170,28 @@ function commerce_license_billing_commerce_line_item_type_info() {
   );
 
   return $line_item_types;
+}
+
+/**
+ * Access callback for the entity API.
+ *
+ * @param string $op
+ *   The operation being performed: usually one of 'view', 'update', 'create',
+ *   'delete' etc.
+ * @param object $entity
+ *   The billing cycle entity.
+ * @param object $account
+ *   The user account for which to check access.
+ *
+ * @return bool
+ *   TRUE to grant access, FALSE otherwise.
+ */
+function commerce_license_billing_cycle_access($op, $entity = NULL, $account = NULL) {
+  if ($op === 'view' && user_access('administer licenses', $account)) {
+    return TRUE;
+  }
+
+  return FALSE;
 }
 
 /**
