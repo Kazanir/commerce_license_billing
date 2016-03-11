@@ -31,6 +31,14 @@ function commerce_license_billing_default_rules_configuration_alter(&$configs) {
  */
 function commerce_license_billing_default_rules_configuration() {
   $items = array();
+
+  if (!field_info_field('cl_billing_type') || !field_info_field('cl_billing_cycle_type')) {
+    // We can't run this until fields are installed. Fail gracefully in the
+    // meantime. Seems to only crop during installation as part of an install
+    // profile.
+    return $items;
+  }
+
   $items['commerce_license_billing_set_postpaid_product_price'] = entity_import('rules_config', '{ "commerce_license_billing_set_postpaid_product_price" : {
       "LABEL" : "Set the price of postpaid products to 0",
       "PLUGIN" : "reaction rule",
