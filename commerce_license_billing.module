@@ -1238,7 +1238,7 @@ function commerce_license_billing_calculate_sell_price($order_id, $product, $qua
  *   A billing cycle entity, or FALSE if none found.
  *
  * This function does a complex set of joins to get the latest billing cycle for
- * a given license. This is done (rather than using EntityFieldQuery) * because
+ * a given license. This is done (rather than using EntityFieldQuery) because
  * EFQ cannot chain entity references, and it ended up being more efficient to
  * do several direct joins and get back the billing cycle ID.
  *
