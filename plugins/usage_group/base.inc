@@ -188,6 +188,13 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
     return $plan_duration == $usage_duration;
   }
 
+  public function generateCharge($definition) {
+    $class = empty($this->groupInfo['charge_class']) ? 'CommerceLicenseBillingCharge' : $this->groupInfo['charge_class'];
+    $charge = new $class($definition);
+
+    return $charge;
+  }
+
   /**
    * Implements CommerceLicenseBillingUsageGroupInterface::onRevisionChange().
    */
