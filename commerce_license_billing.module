@@ -1645,23 +1645,33 @@ function commerce_license_billing_plan_history_charges(CommerceLicenseInterface 
 function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsageInterface $license, $billing_cycle) {
   $history = &drupal_static(__FUNCTION__, array());
   if (!isset($history[$billing_cycle->billing_cycle_id][$license->license_id])) {
-    $data = array(
-      ':license_id' => $license->license_id,
-      ':start' => $billing_cycle->start,
-      ':end' => $billing_cycle->end,
-    );
     // Fetch usage records that overlap this billing cycle. See
     // commerce_license_billing_plan_history_list for details.
-    $result = db_query("SELECT * FROM {cl_billing_usage}
-                          WHERE license_id = :license_id
-                              AND (
-                                (start < :end) AND (
-                                  (end > :start) OR
-                                  (end = 0)
-                                )
-                              )
-                          ORDER BY start ASC", $data);
-    $usage_history = $result->fetchAll(PDO::FETCH_ASSOC);
+    $query = db_select("cl_billing_usage", "clbu");
+    $query->fields("clbu");
+    $time_condition = db_and();
+    // First condition is "start before cycle end"
+    $time_condition->condition("clbu.start", $billing_cycle->end, "<");
+    // Second condition is composite OR:
+    $second_cond = db_or();
+    // Either "end after cycle start" or "no end a.k.a. 0"
+    // @TODO: Fix cycle dates to not use 0 for "never"
+    $second_cond->condition("clbu.end", $billing_cycle->start, ">");
+    $second_cond->condition("clbu.end", 0, "=");
+    // Add the combined OR to the AND as a group
+    $time_condition->condition($second_cond);
+
+    // Add this to the main query. These are AND together by default.
+    $query->condition("clbu.license_id", $license->license_id);
+    $query->condition($time_condition);
+    $query->orderBy("clbu.start", "ASC");
+
+    // If anyone feels really fancy, they can alter the query.
+    // This is recommended for usage groups which want to implement custom or
+    // multi-record storage outside of the base cl_billing_usage table.
+    $query->addTag("cl_billing_usage_history_list");
+
+    $usage_history = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
 
     $group_history = array();
     foreach ($usage_history as $usage_record) {
