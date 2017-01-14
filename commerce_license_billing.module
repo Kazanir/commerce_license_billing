@@ -1037,16 +1037,13 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
     if (!$scheduled_for_cancellation) {
       $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
       $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
-      $def = array(
-        'license_revision_id' => $license->revision_id,
+      $plan_record = array(
+        'revision_id' => $license->revision_id,
         'quantity' => 1,
-        'commerce_product' => $product_wrapper->value(),
-        'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-        'cl_billing_start' => $next_billing_cycle->start,
-        'cl_billing_end' => $next_billing_cycle->end,
-        'match' => array('commerce_product'),
+        'start' => $next_billing_cycle->start,
+        'end' => $next_billing_cycle->end,
       );
-      $plan_charges[] = new CommerceLicenseBillingCharge($def);
+      $plan_charges[] = new CommerceLicenseBillingCharge($plan_record, $product_wrapper, array('commerce_product'));
     }
   }
   elseif ($product_wrapper->cl_billing_type->value() == 'postpaid') {
@@ -1609,17 +1606,10 @@ function commerce_license_billing_plan_history_charges(CommerceLicenseInterface 
     $product = $products[$history_record['product_id']];
     $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
-    $def = array(
-      'license_revision_id' => $history_record['revision_id'],
-      'quantity' => 1,
-      'commerce_product' => $product,
-      'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-      'cl_billing_start' => $history_record['start'],
-      'cl_billing_end' => $history_record['end'],
-      'match' => array('commerce_product', 'cl_billing_start'),
-    );
+    $history_record['quantity'] = 1;
+    $match = array('commerce_product', 'cl_billing_start');
 
-    $charges[] = new CommerceLicenseBillingCharge($def);
+    $charges[] = new CommerceLicenseBillingCharge($history_record, $product_wrapper, $match);
   }
 
   return $charges;

@@ -89,20 +89,9 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
     $product = commerce_product_load_by_sku($this->groupInfo['product']);
     $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
     $charges = array();
+    $match = array('commerce_product', 'cl_billing_start');
     foreach ($usage as $usage_record) {
-      $def = array(
-        // Not all usage records supply the revision ID of the license, as
-        //   is it not always relevant.
-        'license_revision_id' => $usage_record['revision_id'],
-        'commerce_product' => $product,
-        'quantity' => $usage_record['quantity'],
-        'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-        'cl_billing_start' => $usage_record['start'],
-        'cl_billing_end' => $usage_record['end'],
-        'match' => array('commerce_product', 'cl_billing_start'),
-        'usage_group' => $this->groupName,
-      );
-      $charges[] = $this->generateCharge($def);
+      $charges[] = $this->generateCharge($usage_record, $product_wrapper, $match);
     }
 
     return $charges;

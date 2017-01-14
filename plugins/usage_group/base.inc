@@ -188,9 +188,11 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
     return $plan_duration == $usage_duration;
   }
 
-  public function generateCharge($definition) {
-    $class = empty($this->groupInfo['charge_class']) ? 'CommerceLicenseBillingCharge' : $this->groupInfo['charge_class'];
-    $charge = new $class($definition);
+  public function generateCharge($usage_record, $product_wrapper, $match, $class = NULL) {
+    if (!$class) {
+      $class = empty($this->groupInfo['charge_class']) ? 'CommerceLicenseBillingCharge' : $this->groupInfo['charge_class'];
+    }
+    $charge = new $class($usage_record, $product_wrapper, $match, $this->groupName);
 
     return $charge;
   }

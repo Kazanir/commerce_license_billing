@@ -93,16 +93,13 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
     if ($total > 0) {
       $product = commerce_product_load_by_sku($this->groupInfo['product']);
       $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
-      $def = array(
-        'usage_group' => $this->groupName,
+      $match = array('commerce_product', 'cl_billing_start');
+      $total_record = array(
         'quantity' => $total,
-        'commerce_product' => $product,
-        'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-        'cl_billing_start' => $billingCycle->start,
-        'cl_billing_end' => $billingCycle->end,
-        'match' => array('commerce_product', 'cl_billing_start'),
+        'start' => $billingCycle->start,
+        'end' => $billingCycle->end,
       );
-      $charges[] = $this->generateCharge($def);
+      $charges[] = $this->generateCharge($total_record, $product_wrapper, $match);
     }
 
     return $charges;

@@ -8,7 +8,7 @@ interface CommerceLicenseBillingChargeInterface extends ArrayAccess {
 
 class CommerceLicenseBillingCharge implements CommerceLicenseBillingChargeInterface {
 
-  const SCHEMA = [
+  protected static $schema = array(
     'usage_group',
     'quantity',
     'commerce_product',
@@ -17,20 +17,32 @@ class CommerceLicenseBillingCharge implements CommerceLicenseBillingChargeInterf
     'cl_billing_start',
     'cl_billing_end',
     'match',
-  ];
+  );
 
   protected $container = array();
 
-  public function __construct(array $def) {
-    foreach ($def as $k => $v) {
-      if (!in_array($k, static::SCHEMA)) {
-        throw new DomainException("This charge type does not support the $k data element.");
-      }
-      $this->container[$k] = $v;
+  public function __construct($record, $product_wrapper, $match, $group_name = NULL) {
+    $this->container = array(
+      'commerce_product' => $product_wrapper->value(),
+      'quantity' => $record['quantity'],
+      'commerce_unit_price' => $product_wrapper->commerce_price->value(),
+      'cl_billing_start' => $record['start'],
+      'cl_billing_end' => $record['end'],
+      'match' => $match,
+    );
+
+    if (isset($record['revision_id'])) {
+      // Not all usage records supply the revision ID of the license, as
+      // it is not always relevant.
+      $this->container['license_revision_id'] = $record['revision_id'];
+    }
+
+    if ($group_name) {
+      $this->container['usage_group'] = $group_name;
     }
 
     // Fill in the blanks.
-    foreach (static::SCHEMA as $k) {
+    foreach (static::$schema as $k) {
       if (!isset($this->container[$k])) {
         $this->container[$k] = NULL;
       }
@@ -43,7 +55,7 @@ class CommerceLicenseBillingCharge implements CommerceLicenseBillingChargeInterf
     }
     $match = TRUE;
     foreach ($this->container['match'] as $key) {
-      if (!in_array($key, static::SCHEMA)) {
+      if (!in_array($key, static::$schema)) {
         throw new DomainException("Trying to match data value not in the schema for this charge type.");
       }
 
@@ -95,7 +107,7 @@ class CommerceLicenseBillingCharge implements CommerceLicenseBillingChargeInterf
     if (is_null($offset)) {
       throw new DomainException("This charge type does not support unmapped data elements.");
     }
-    elseif (!in_array($offset, static::SCHEMA)) {
+    elseif (!in_array($offset, static::$schema)) {
       throw new DomainException("This charge type does not support the $offset data element.");
     }
     else {
