@@ -9,6 +9,24 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
 
   /**
    * Overrides CommerceLicenseBillingUsageBase::addUsage().
+   *
+   * Gauge usage behaves differently than counter usage. Because gauge usage
+   * measures periods of time and has to cover the entire span of the plan
+   * during a given billing cycle, this function needs to ensure that no
+   * existing usage records exist for the requested time period.
+   *
+   * A new gauge usage record will always "take over" the requested time frame,
+   * removing other usage records which occupy the same timeframe and adjusting
+   * those which overlap to "make space" for the new usage record.
+   *
+   * The default behavior ends up being intuitive if only start times are used,
+   * but the results are consistent even if specific time periods are inserted
+   * out of sequence or need to be updated after their original insertion.
+   *
+   * Note that it is still the responsibility of the caller to call this method
+   * with the appropriate revision IDs -- it is possible to break usage records
+   * by inserting usage for timeframes with the wrong revision ID -- this is
+   * considered a known issue which does not arise in normal use cases.
    */
   public function addUsage($revisionId, $quantity, $start = NULL, $end = 0) {
     if (is_null($start)) {
@@ -16,20 +34,61 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
       $start = commerce_license_get_time();
     }
 
-    // Close the previous usage.
-    $previous_end = $start - 1;
+    $txn = db_transaction();
+
+    // Look for a record which overlaps the new usage group from the start
+    // side. This gets updated to align with the new record's start time.
     db_update('cl_billing_usage')
       ->fields(array(
-        'end' => $previous_end,
+        'end' => ($start - 1),
       ))
       ->condition('license_id', $this->license->license_id)
-      ->condition('revision_id', $revisionId)
       ->condition('usage_group', $this->groupName)
-      ->condition('end', 0)
+      ->condition(db_or()
+        ->condition('end', 0)
+        ->condition('end', $start, ">=")
+      )
+      ->condition('start', $start, "<")
       ->execute();
 
-    // Open the new usage.
+    if ($end == 0) {
+      // Since there is no end for the new usage, we need to delete all records
+      // which start on or after the requested start time.
+      db_delete('cl_billing_usage')
+        ->condition('license_id', $this->license->license_id)
+        ->condition('usage_group', $this->groupName)
+        ->condition('start', $start, ">=")
+        ->execute();
+    }
+    else {
+      // Look for any usage records inside of the new record and delete them.
+      db_delete('cl_billing_usage')
+        ->condition('license_id', $this->license->license_id)
+        ->condition('usage_group', $this->groupName)
+        ->condition('start', $start, ">=")
+        ->condition('end', $end, "<=")
+        ->execute();
+
+      // Look for a usage record which overlaps the new record from the end
+      // side. Update this to have a start immediately after the new record's
+      // end time.
+      db_update('cl_billing_usage')
+        ->fields(array(
+          'start' => ($end + 1),
+        ))
+        ->condition('license_id', $this->license->license_id)
+        ->condition('usage_group', $this->groupName)
+        ->condition(db_or()
+          ->condition('start', $start, ">=")
+          ->condition('end', $end, ">")
+        )
+      ->execute();
+    }
+
+    // Once this is all finished we insert the new record normally.
     parent::addUsage($revisionId, $quantity, $start, $end);
+
+    unset($txn);
   }
 
   /**
