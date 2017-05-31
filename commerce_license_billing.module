@@ -314,6 +314,9 @@ function commerce_license_billing_cycle_renew_queue_process($item) {
     );
   }
   $order = $billing_cycle->getOrder();
+  if (!$order) {
+    throw new \Exception(t('No order found for billing cycle @id', array('@id' => $billing_cycle_id)));
+  }
 
   $licenses = commerce_license_billing_get_recurring_order_licenses($order);
   foreach ($licenses as $license) {
@@ -367,6 +370,9 @@ function commerce_license_billing_cycle_close_queue_process($item) {
     );
   }
   $order = $billing_cycle->getOrder();
+  if (!$order) {
+    throw new \Exception(t('No order found for billing cycle @id', array('@id' => $billing_cycle_id)));
+  }
   // The recurring order is empty. It probably contained prepaid licenses
   // that got cancelled in the meantime. Delete the order and stop here.
   if (empty($order->commerce_line_items)) {
