@@ -1072,45 +1072,49 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
 /**
  * Estimate the cost of a license with the given plan and usage.
  *
- * @param $license_type
+ * @param string $license_type
  *   The license type.
- * @param $uid
+ * @param int $uid
  *   The uid of the license owner.
- * @param $product
+ * @param object $product
  *   The product representing the license plan.
- * @param $usage
- *  An array in the usage_group => quantity format.
+ * @param array|NULL $usage
+ *   An array in the usage_group => quantity format.
+ * @param int|NULL $order_id
+ *   The order ID to use for price calculations.
  *
- * @return
+ * @return array
  *   An array with the following keys:
  *   - billing_cycle: An array with the title, start, end keys.
  *   - charges: An array of arrays with product, unit_price, quantity keys.
  *   - total: The total price array (amount, currency_code, data).
  */
-function commerce_license_billing_estimate_cost($license_type, $uid, $product, $usage = NULL) {
+function commerce_license_billing_estimate_cost($license_type, $uid, $product, array $usage = NULL, $order_id = NULL) {
   // Prepare commonly needed data.
   $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
   // Construct a billing cycle.
   $billing_cycle_type = $product_wrapper->cl_billing_cycle_type->value();
   $current_time = commerce_license_get_time();
-  $billing_cycle = $billing_cycle_type->getBillingCycle($GLOBALS['user']->uid, $current_time, FALSE);
+  $billing_cycle = $billing_cycle_type->getBillingCycle($uid, $current_time, FALSE);
   // Try to determine the order_id to be set on the line item, used during
   // price calculation. Start by searching for an active recurring order.
   // If not found, see if the user has an active cart, and use its order_id.
-  $order_id = 0;
-  $query = new EntityFieldQuery;
-  $query
-    ->entityCondition('entity_type', 'commerce_order')
-    ->entityCondition('bundle', 'recurring')
-    ->propertyCondition('uid', $uid)
-    ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle->billing_cycle_id);
-  $result = $query->execute();
-  if ($result) {
-    $order_id = key($result['commerce_order']);
-  }
-  else {
-    if ($cart_order = commerce_cart_order_load($uid)) {
-      $order_id = $cart_order->order_id;
+  if ($order_id === NULL) {
+    $order_id = 0;
+    $query = new EntityFieldQuery;
+    $query
+      ->entityCondition('entity_type', 'commerce_order')
+      ->entityCondition('bundle', 'recurring')
+      ->propertyCondition('uid', $uid)
+      ->fieldCondition('cl_billing_cycle', 'target_id', $billing_cycle->billing_cycle_id);
+    $result = $query->execute();
+    if ($result) {
+      $order_id = key($result['commerce_order']);
+    }
+    else {
+      if ($cart_order = commerce_cart_order_load($uid)) {
+        $order_id = $cart_order->order_id;
+      }
     }
   }
 
