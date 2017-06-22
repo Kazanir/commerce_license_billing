@@ -918,8 +918,8 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
     $order_wrapper->save();
   }
 
-  lock_release($lock_name);
   unset($transaction);
+  lock_release($lock_name);
 }
 
 /**
