@@ -764,6 +764,15 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
     return;
   }
 
+  // Ensure that no two processes can refresh this order in parallel.
+  $lock_name = __FUNCTION__ . ':' . $order->order_id;
+  if (!lock_acquire($lock_name)) {
+    return;
+  }
+
+  // Ensure that line item and order modifications are wrapped in a transaction.
+  $transaction = db_transaction($lock_name);
+
   $licenses = array();
   $old_line_items = array();
   $old_line_item_ids = array();
@@ -905,6 +914,9 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
     }
     $order_wrapper->save();
   }
+
+  lock_release($lock_name);
+  unset($transaction);
 }
 
 /**
