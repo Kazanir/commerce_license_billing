@@ -205,6 +205,9 @@ function commerce_license_billing_install() {
 function commerce_license_billing_uninstall() {
   variable_del('bundleswitcher__cl_billing_cycle_type');
 
+  variable_del('commerce_license_billing_refresh_debug');
+  variable_del('commerce_license_billing_refresh_debug_orders');
+
   // Remove the product fields.
   field_delete_field('cl_billing_cycle_type');
   field_delete_field('cl_billing_type');

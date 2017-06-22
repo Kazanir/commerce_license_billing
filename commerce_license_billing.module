@@ -757,6 +757,15 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
 
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
   $billing_cycle = $order_wrapper->cl_billing_cycle->value();
+
+  if (!$billing_cycle) {
+    watchdog('commerce_license_billing', 'Could not find billing cycle during refresh for order @order_id', [
+      '@order_id' => $order->order_id,
+    ], WATCHDOG_ERROR);
+
+    return;
+  }
+
   $licenses = array();
   $old_line_items = array();
   $old_line_item_ids = array();
@@ -794,6 +803,16 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
     $old_line_item_ids[] = $line_item_id;
   }
 
+  _commerce_license_billing_refresh_debug($order, 'Found @count licenses: @licenses', [
+    '@count' => count($licenses),
+    '@licenses' => implode(',', array_keys($licenses)),
+  ]);
+
+  _commerce_license_billing_refresh_debug($order, 'Found @count "old" line items: @lis', [
+    '@count' => count($old_line_item_ids),
+    '@lis' => implode(',', $old_line_item_ids),
+  ]);
+
   $order_needs_save = FALSE;
   // Remove any licenses that couldn't be loaded due to broken references.
   $old_license_count = count($licenses);
@@ -821,17 +840,33 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
 
         if ($match) {
           $existing_line_item = $line_item_wrapper->value();
+          _commerce_license_billing_refresh_debug($order, 'Found existing line item @li_id for license @license matching charge: <pre>@charge</pre>', [
+            '@li_id' => $existing_line_item->line_item_id,
+            '@license' => $license->license_id,
+            '@charge' => print_r($charge, TRUE),
+          ]);
           break;
         }
       }
 
       if (!$existing_line_item) {
+        _commerce_license_billing_refresh_debug($order, 'Failed to find existing line item for license @license matching charge: <pre>@charge</pre>', [
+          '@license' => $license->license_id,
+          '@charge' => print_r($charge, TRUE),
+        ]);
+
         // No line item found, create one.
         $line_item = commerce_license_billing_line_item_new($license, $charge, $order->order_id);
         commerce_line_item_save($line_item);
 
         $line_items[$line_item->line_item_id] = $line_item;
         $order_needs_save = TRUE;
+
+        _commerce_license_billing_refresh_debug($order, "Created new line item @li_id:\n<br /><pre>@li</pre>\n<br />Charge: <pre>@charge</pre>", [
+          '@li_id' => $line_item->line_item_id,
+          '@li' => print_r($line_item, TRUE),
+          '@charge' => print_r($charge, TRUE),
+        ]);
       }
       else {
         // Update a copy of the line item.
@@ -853,8 +888,19 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
         $quantity_changed = ($existing_line_item->quantity != $line_item->quantity);
         if ($amount_changed || $currency_changed || $components_changed || $quantity_changed) {
           // Found a difference, save the updated line item.
+          _commerce_license_billing_refresh_debug($order, "Updating line item @li_id because data changed.\n<br />Old data: <pre>@old</pre>\n<br />New data: <pre>@new</pre>\n<br />Charge: <pre>@charge</pre>", [
+            '@li_id' => $line_item->line_item_id,
+            '@old' => print_r($existing_line_item, TRUE),
+            '@new' => print_r($line_item, TRUE),
+            '@charge' => print_r($charge, TRUE),
+          ]);
           commerce_line_item_save($line_item);
           $order_needs_save = TRUE;
+        }
+        else {
+          _commerce_license_billing_refresh_debug($order, "Did not have to update line item @li_id, no data changed.", [
+            '@li_id' => $line_item->line_item_id,
+          ]);
         }
 
         $line_items[$line_item->line_item_id] = $line_item;
@@ -871,10 +917,16 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
   $new_line_item_ids = array_keys($line_items);
   $dropped_line_item_ids = array_diff($old_line_item_ids, $new_line_item_ids);
   if ($dropped_line_item_ids) {
+    _commerce_license_billing_refresh_debug($order, 'Found line item IDs to drop: @ids', [
+      '@ids' => implode(',', $dropped_line_item_ids),
+    ]);
+
     // Make sure to update the order line item list.
     $order_needs_save = TRUE;
     // Delete dropped line items.
     commerce_line_item_delete_multiple($dropped_line_item_ids);
+  } else {
+    _commerce_license_billing_refresh_debug($order, 'Did not find any line item IDs to drop');
   }
 
   // If we're using timed, queued refreshes, the queue will have passed a
@@ -886,10 +938,12 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
 
   // Update the order, if new line items were created.
   if ($order_needs_save) {
+    _commerce_license_billing_refresh_debug($order, 'The order needs saving');
     if ($line_items) {
       $order_wrapper->commerce_line_items = array_values($line_items);
     }
     else {
+      _commerce_license_billing_refresh_debug($order, 'No line items to save');
       // Doing $order_wrapper->commerce_line_items = array() produces
       // $order->commerce_line_items = array(LANGUAGE_NONE => array()), which
       // messes up the empty($order->commerce_line_items) check, so that
@@ -897,6 +951,32 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
       $order->commerce_line_items = array();
     }
     $order_wrapper->save();
+  } else {
+    _commerce_license_billing_refresh_debug($order, 'The order does not need saving (nothing changed)');
+  }
+}
+
+/**
+ * Debug the order refresh process.
+ *
+ * @param object $order
+ *   The order being refreshed.
+ * @param string $message
+ *   A debug message to log.
+ * @param array  $variables
+ *   Replacement variables for the message.
+ */
+function _commerce_license_billing_refresh_debug($order, $message, array $variables = []) {
+  if (variable_get('commerce_license_billing_refresh_debug')) {
+    $order_ids = variable_get('commerce_license_billing_refresh_debug_orders');
+    if (!is_array($order_ids) || in_array($order->order_id, $order_ids)) {
+      watchdog(
+        'clb_refresh_debug:' . $order->order_id,
+        $message,
+        $variables,
+        WATCHDOG_DEBUG
+      );
+    }
   }
 }
 
