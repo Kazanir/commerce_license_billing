@@ -909,6 +909,12 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
           commerce_line_item_save($line_item);
           $order_needs_save = TRUE;
         }
+        else {
+          _commerce_license_billing_refresh_debug("Did not have to update line item @li_id in order @order, no data changed.", [
+            '@li_id' => $line_item->line_item_id,
+            '@order' => $order->order_id,
+          ]);
+        }
 
         $line_items[$line_item->line_item_id] = $line_item;
       }
@@ -965,6 +971,10 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
       $order->commerce_line_items = array();
     }
     $order_wrapper->save();
+  } else {
+    _commerce_license_billing_refresh_debug('The order @order_id was not updated, it does not need saving', [
+      '@order_id' => $order->order_id,
+    ]);
   }
 }
 
