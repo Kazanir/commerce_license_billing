@@ -767,6 +767,9 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
   // Ensure that no two processes can refresh this order in parallel.
   $lock_name = __FUNCTION__ . ':' . $order->order_id;
   if (!lock_acquire($lock_name)) {
+    watchdog('commerce_license_billing', 'Avoiding parallel refresh of order @order due to an active lock', [
+      '@order' => $order->order_id,
+    ], WATCHDOG_DEBUG);
     return;
   }
 
