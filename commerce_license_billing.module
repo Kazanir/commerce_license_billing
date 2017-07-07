@@ -1082,6 +1082,8 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
  *   An array in the usage_group => quantity format.
  * @param int|NULL $order_id
  *   The order ID to use for price calculations.
+ * @param object|NULL $license
+ *   The license to use for price calculations.
  *
  * @return array
  *   An array with the following keys:
@@ -1089,7 +1091,7 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
  *   - charges: An array of arrays with product, unit_price, quantity keys.
  *   - total: The total price array (amount, currency_code, data).
  */
-function commerce_license_billing_estimate_cost($license_type, $uid, $product, array $usage = NULL, $order_id = NULL) {
+function commerce_license_billing_estimate_cost($license_type, $uid, $product, array $usage = NULL, $order_id = NULL, $license = NULL) {
   // Prepare commonly needed data.
   $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
   // Construct a billing cycle.
@@ -1126,7 +1128,7 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, a
     ),
   );
   // Price the base product.
-  $price = commerce_license_billing_calculate_sell_price($order_id, $product, 1, $billing_cycle);
+  $price = commerce_license_billing_calculate_sell_price($order_id, $product, 1, $billing_cycle, $license);
   $estimation['charges'][] = array(
     'product' => $product,
     'quantity' => 1,
@@ -1142,11 +1144,14 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, a
   );
   $zero_price['data'] = commerce_price_component_add($zero_price, 'base_price', $zero_price, TRUE, FALSE);
 
-  // Price the usage.
-  $license = entity_create('commerce_license', array('type' => $license_type));
-  $license->product_id = $product->product_id;
-  $license->granted = commerce_license_get_time();
-  $license->expires = $billing_cycle->end;
+  // If license not provided, mock it to price the usage.
+  if (empty($license)) {
+    $license = entity_create('commerce_license', array('type' => $license_type));
+    $license->product_id = $product->product_id;
+    $license->granted = commerce_license_get_time();
+    $license->expires = $billing_cycle->end;
+  }
+
   if ($license instanceof CommerceLicenseBillingUsageInterface && !empty($usage)) {
     $usage_groups = $license->usageGroups();
     foreach ($usage as $group_name => $quantity) {
@@ -1158,7 +1163,7 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, a
       }
       else {
         $quantity -= $usage_group['free_quantity'];
-        $unit_price = commerce_license_billing_calculate_sell_price($order_id, $usage_product, $quantity, $billing_cycle);
+        $unit_price = commerce_license_billing_calculate_sell_price($order_id, $usage_product, $quantity, $billing_cycle, $license);
         $total_price = $unit_price;
         // Multiply the amount and all price components by quantity.
         $total_price['amount'] *= $quantity;
@@ -1210,15 +1215,21 @@ function commerce_license_billing_estimate_cost($license_type, $uid, $product, a
  *   The product quantity.
  * @param $billing_cycle
  *   The billing cycle for this product.
+ * @param $license
+ *   (optional) Inject license into the line item mock for better integration.
+ *   with cl_billing_pricing.
  *
  * @return
  *   A price field data array as returned by entity_metadata_wrapper().
  */
-function commerce_license_billing_calculate_sell_price($order_id, $product, $quantity, $billing_cycle) {
+function commerce_license_billing_calculate_sell_price($order_id, $product, $quantity, $billing_cycle, $license = NULL) {
   $line_item = commerce_line_item_new('recurring', $order_id);
   $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
   $line_item->cl_billing_start[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $billing_cycle->start);
   $line_item->cl_billing_end[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $billing_cycle->end);
+  if (!empty($license)) {
+    $line_item_wrapper->cl_billing_license->set($license);
+  }
   $line_item_wrapper->quantity = $quantity;
   commerce_product_line_item_populate($line_item, $product);
   // Pass the line item to Rules.
