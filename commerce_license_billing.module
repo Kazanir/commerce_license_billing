@@ -786,6 +786,25 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
 
   $order_wrapper = entity_metadata_wrapper('commerce_order', $order);
   $billing_cycle = $order_wrapper->cl_billing_cycle->value();
+  if (!$billing_cycle) {
+    watchdog('commerce_license_billing', 'No billing cycle found in order @order: cannot refresh', [
+      '@order' => $order->order_id,
+    ], WATCHDOG_ERROR);
+    return;
+  }
+
+  // Ensure that no two processes can refresh this order in parallel.
+  $lock_name = __FUNCTION__ . '_' . $order->order_id;
+  if (!lock_acquire($lock_name)) {
+    watchdog('commerce_license_billing', 'Avoiding parallel refresh of order @order due to an active lock', [
+      '@order' => $order->order_id,
+    ], WATCHDOG_DEBUG);
+    return;
+  }
+
+  // Ensure that line item and order modifications are wrapped in a transaction.
+  $transaction = db_transaction($lock_name);
+
   $licenses = array();
   $old_line_items = array();
   $old_line_item_ids = array();
@@ -927,6 +946,9 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
     }
     $order_wrapper->save();
   }
+
+  unset($transaction);
+  lock_release($lock_name);
 }
 
 /**
