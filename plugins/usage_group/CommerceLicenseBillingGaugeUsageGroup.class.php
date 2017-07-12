@@ -144,7 +144,16 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
       }
     }
 
-    return $usage;
+    // Turn usage records into real charges.
+    $product = commerce_product_load_by_sku($this->groupInfo['product']);
+    $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+    $charges = array();
+    $match = array('commerce_product', 'cl_billing_start');
+    foreach ($usage as $usage_record) {
+      $charges[] = $this->generateCharge($usage_record, $product_wrapper, $match);
+    }
+
+    return $charges;
   }
 
   /**

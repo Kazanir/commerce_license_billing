@@ -58,7 +58,7 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
    * collapsed into one record per usage group.
    */
   public function chargeableUsage(CommerceLicenseBillingCycle $billingCycle) {
-    $chargeable_usage = array();
+    $charges = array();
     $usage = $this->usageHistory($billingCycle);
     $free_quantities = $this->freeQuantities($billingCycle);
     $billing_cycle_duration = $billingCycle->end - $billingCycle->start;
@@ -91,15 +91,18 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
     }
 
     if ($total > 0) {
-      $chargeable_usage[] = array(
-        'usage_group' => $this->groupName,
+      $product = commerce_product_load_by_sku($this->groupInfo['product']);
+      $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+      $match = array('commerce_product', 'cl_billing_start');
+      $total_record = array(
         'quantity' => $total,
         'start' => $billingCycle->start,
         'end' => $billingCycle->end,
       );
+      $charges[] = $this->generateCharge($total_record, $product_wrapper, $match);
     }
 
-    return $chargeable_usage;
+    return $charges;
   }
 
   /**

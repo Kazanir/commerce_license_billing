@@ -15,6 +15,7 @@ dependencies[] = views_megarow
 files[] = commerce_license_billing.info.inc
 files[] = plugins/billing_cycle_engine/base.inc
 files[] = includes/commerce_license_billing.interface.inc
+files[] = includes/commerce_license_billing.charge.inc
 files[] = includes/commerce_license_billing.cycle_type_ui.inc
 files[] = includes/commerce_license_billing.cycle.inc
 

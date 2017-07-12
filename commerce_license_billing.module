@@ -156,6 +156,28 @@ function commerce_license_billing_entity_info_alter(&$entity_info) {
 }
 
 /**
+ * Implements hook_entity_property_info_alter().
+ */
+function commerce_license_billing_entity_property_info_alter(&$info) {
+  $info['commerce_line_item']['bundles']['recurring']['properties']['cl_billing_charge'] = array(
+    'label' => t('Line item charge'),
+    'type' => 'struct',
+    'getter callback' => 'commerce_license_billing_get_charge',
+  );
+}
+
+/**
+ * Getter function for returning the charge which generated a recurring line item.
+ */
+function commerce_license_billing_get_charge($line_item, array $options, $name, $type, $info) {
+  if (!empty($line_item->data['charge'])) {
+    return $line_item->data['charge'];
+  }
+
+  return NULL;
+}
+
+/**
  * Implements hook_commerce_line_item_type_info().
  */
 function commerce_license_billing_commerce_line_item_type_info() {
@@ -859,12 +881,12 @@ function commerce_license_billing_order_refresh($order, $set_refresh_timer = FAL
       $existing_line_item = NULL;
       // Try to find an existing line item that can be updated.
       foreach ($old_line_items[$license_id] as $line_item_wrapper) {
-        $match = TRUE;
-        foreach ($charge['match'] as $key) {
-          if ($line_item_wrapper->{$key}->value() != $charge[$key]) {
-            $match = FALSE;
-            break;
-          }
+        if ($charge instanceof CommerceLicenseBillingChargeInterface) {
+          $match = $charge->match($line_item_wrapper);
+        }
+        else {
+          // Support backwards compatibility with non-object charges.
+          $match = _commerce_license_billing_charge_match($charge, $line_item_wrapper);
         }
 
         if ($match) {
@@ -986,30 +1008,41 @@ function commerce_license_billing_line_item_new(CommerceLicenseInterface $licens
  */
 function commerce_license_billing_populate_line_item($line_item, $charge) {
   $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
-  $line_item_wrapper->line_item_label = $charge['commerce_product']->sku;
-  $line_item_wrapper->commerce_product = $charge['commerce_product'];
-  $line_item_wrapper->quantity = $charge['quantity'];
-  $line_item_wrapper->commerce_unit_price = $charge['commerce_unit_price'];
-  // We strip out price and product details, and retain the rest of the info on
-  // the price component.
-  $base_component = $line_item_wrapper->commerce_unit_price->value();
-  unset($charge['commerce_product'], $charge['commerce_unit_price']);
-  $base_component['data'] = array(
-    'charge' => $charge,
-  );
+  if ($charge instanceof CommerceLicenseBillingChargeInterface) {
+    $charge->populate($line_item_wrapper);
+  }
+  else {
+    $line_item_wrapper->line_item_label = $charge['commerce_product']->sku;
+    $line_item_wrapper->commerce_product = $charge['commerce_product'];
+    $line_item_wrapper->quantity = $charge['quantity'];
+    $line_item_wrapper->commerce_unit_price = $charge['commerce_unit_price'];
+    // We strip out price and product details, and retain the rest of the charge
+    // on the price component.
+    $base_component = $line_item_wrapper->commerce_unit_price->value();
+    unset($charge['commerce_product'], $charge['commerce_unit_price']);
+    // Charges are now stored on the line item's data array directly rather
+    // than on a price component which might be accidentally changed by pricing
+    // rules. This is left for BC reasons but users relying on the charge data
+    // should move to the new property_info implementation.
+    $base_component['data'] = array(
+      'charge' => $charge,
+    );
+    $line_item->data['charge'] = $charge;
 
-
-  $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add(
-    $line_item_wrapper->commerce_unit_price->value(),
-    'base_price',
-    $base_component,
-    TRUE
-  );
-  $line_item->cl_billing_start[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $charge['cl_billing_start']);
-  $line_item->cl_billing_end[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $charge['cl_billing_end']);
-  // Store the revision ID of the license used to generate the charge, if any.
-  if (!empty($charge['license_revision_id'])) {
-    $line_item->data['license_revision_id'] = $charge['license_revision_id'];
+    $line_item_wrapper->commerce_unit_price->data = commerce_price_component_add(
+      $line_item_wrapper->commerce_unit_price->value(),
+      'base_price',
+      $base_component,
+      TRUE
+    );
+    $line_item->cl_billing_start[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $charge['cl_billing_start']);
+    $line_item->cl_billing_end[LANGUAGE_NONE][0]['value'] = date("Y-m-d H:i:s", $charge['cl_billing_end']);
+    // Store the revision ID of the license used to generate the charge, if any.
+    // With the change to store the generating charge directly on the line item
+    // this is no longer necessary, but is left for BC reasons.
+    if (!empty($charge['license_revision_id'])) {
+      $line_item->data['license_revision_id'] = $charge['license_revision_id'];
+    }
   }
 
   // Trigger price calculation to get any needed discounts or price changes.
@@ -1035,7 +1068,7 @@ function commerce_license_billing_populate_line_item($line_item, $charge) {
  *     when looking for an existing line item for the charge.
  */
 function commerce_license_billing_collect_charges(CommerceLicenseInterface $license, $billing_cycle) {
-  $charges = array();
+  $plan_charges = array();
   // Charge the plan.
   // In case of prepaid, the plan charge is for the entire next billing cycle.
   // In case of postpaid, all plan changes in the current month are charged.
@@ -1055,69 +1088,52 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
     if (!$scheduled_for_cancellation) {
       $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
       $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
-      $charges[] = array(
-        'license_revision_id' => $license->revision_id,
+      $plan_record = array(
+        'revision_id' => $license->revision_id,
         'quantity' => 1,
-        'commerce_product' => $product_wrapper->value(),
-        'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-        'cl_billing_start' => $next_billing_cycle->start,
-        'cl_billing_end' => $next_billing_cycle->end,
-        'match' => array('commerce_product'),
+        'start' => $next_billing_cycle->start,
+        'end' => $next_billing_cycle->end,
       );
+      $plan_charges[] = new CommerceLicenseBillingCharge($plan_record, $product_wrapper, array('commerce_product'));
     }
   }
   elseif ($product_wrapper->cl_billing_type->value() == 'postpaid') {
-    $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle);
-    // Gather all products.
-    $product_ids = array();
-    foreach ($plan_history as $history_record) {
-      $product_ids[] = $history_record['product_id'];
-    }
-    $products = commerce_product_load_multiple($product_ids);
-
-    foreach ($plan_history as $history_record) {
-      $product = $products[$history_record['product_id']];
-      $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
-
-      $charges[] = array(
-        'license_revision_id' => $history_record['revision_id'],
-        'quantity' => 1,
-        'commerce_product' => $product,
-        'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-        'cl_billing_start' => $history_record['start'],
-        'cl_billing_end' => $history_record['end'],
-        'match' => array('commerce_product', 'cl_billing_start'),
-      );
-    }
+    $plan_charges = commerce_license_billing_plan_history_charges($license, $billing_cycle);
   }
 
   // Charge for usage, if the license type supports it.
+  $usage_charges = array();
   if ($license instanceof CommerceLicenseBillingUsageInterface) {
     $usage_groups = $license->usageGroups();
     foreach ($usage_groups as $group_name => $group_info) {
       $usage_group = commerce_license_billing_usage_group($license, $group_name);
       $chargeable_usage = $usage_group->chargeableUsage($billing_cycle);
-      foreach ($chargeable_usage as $usage_record) {
-        $product = commerce_product_load_by_sku($group_info['product']);
-        $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
-
-        $charges[] = array(
-          // Not all usage records supply the revision ID of the license, as
-          //   is it not always relevant.
-          'license_revision_id' => (isset($usage_record['revision_id']) ? $usage_record['revision_id'] : NULL),
-          'commerce_product' => $product,
-          'quantity' => $usage_record['quantity'],
-          'commerce_unit_price' => $product_wrapper->commerce_price->value(),
-          'cl_billing_start' => $usage_record['start'],
-          'cl_billing_end' => $usage_record['end'],
-          'match' => array('commerce_product', 'cl_billing_start'),
-          'usage_group' => $usage_record['usage_group'],
-        );
+      foreach ($chargeable_usage as $charge) {
+        $usage_charges[] = $charge;
       }
     }
   }
 
+  $charges = array_merge($plan_charges, $usage_charges);
+
+  drupal_alter('commerce_license_billing_charges', $charges, $license, $billing_cycle);
+
   return $charges;
+}
+
+/**
+ * Used for backwards compatibility. Match a charge record against
+ * a line item wrapper.
+ */
+function _commerce_license_billing_charge_match($charge, $line_item_wrapper) {
+  $match = TRUE;
+  foreach ($charge['match'] as $key) {
+    if ($line_item_wrapper->{$key}->value() != $charge[$key]) {
+      $match = FALSE;
+      break;
+    }
+  }
+  return $match;
 }
 
 /**
@@ -1289,7 +1305,7 @@ function commerce_license_billing_calculate_sell_price($order_id, $product, $qua
  *   A billing cycle entity, or FALSE if none found.
  *
  * This function does a complex set of joins to get the latest billing cycle for
- * a given license. This is done (rather than using EntityFieldQuery) * because
+ * a given license. This is done (rather than using EntityFieldQuery) because
  * EFQ cannot chain entity references, and it ended up being more efficient to
  * do several direct joins and get back the billing cycle ID.
  *
@@ -1616,6 +1632,41 @@ function commerce_license_billing_plan_history_list(CommerceLicenseInterface $li
 }
 
 /**
+ * Turns the license plan history for a given license and billing cycle into
+ * charge objects.
+ *
+ * @param $license
+ *   The license entity
+ * @param $billing_cycle
+ *   This billing cycle entity.
+ *
+ * @return CommerceLicenseBillingChargeInterface[]
+ */
+function commerce_license_billing_plan_history_charges(CommerceLicenseInterface $license, $billing_cycle) {
+  $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle);
+  $charges = array();
+
+  // Gather all products to do a bit of performance-improving preloading.
+  $product_ids = array();
+  foreach ($plan_history as $history_record) {
+    $product_ids[] = $history_record['product_id'];
+  }
+  $products = commerce_product_load_multiple($product_ids);
+
+  foreach ($plan_history as $history_record) {
+    $product = $products[$history_record['product_id']];
+    $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
+
+    $history_record['quantity'] = 1;
+    $match = array('commerce_product', 'cl_billing_start');
+
+    $charges[] = new CommerceLicenseBillingCharge($history_record, $product_wrapper, $match);
+  }
+
+  return $charges;
+}
+
+/**
  * Returns the license usage history for an open billing cycle.
  *
  * The usage history records are grouped by usage group.
@@ -1635,23 +1686,33 @@ function commerce_license_billing_plan_history_list(CommerceLicenseInterface $li
 function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsageInterface $license, $billing_cycle) {
   $history = &drupal_static(__FUNCTION__, array());
   if (!isset($history[$billing_cycle->billing_cycle_id][$license->license_id])) {
-    $data = array(
-      ':license_id' => $license->license_id,
-      ':start' => $billing_cycle->start,
-      ':end' => $billing_cycle->end,
-    );
     // Fetch usage records that overlap this billing cycle. See
     // commerce_license_billing_plan_history_list for details.
-    $result = db_query("SELECT * FROM {cl_billing_usage}
-                          WHERE license_id = :license_id
-                              AND (
-                                (start < :end) AND (
-                                  (end > :start) OR
-                                  (end = 0)
-                                )
-                              )
-                          ORDER BY start ASC", $data);
-    $usage_history = $result->fetchAll(PDO::FETCH_ASSOC);
+    $query = db_select("cl_billing_usage", "clbu");
+    $query->fields("clbu");
+    $time_condition = db_and();
+    // First condition is "start before cycle end"
+    $time_condition->condition("clbu.start", $billing_cycle->end, "<");
+    // Second condition is composite OR:
+    $second_cond = db_or();
+    // Either "end after cycle start" or "no end a.k.a. 0"
+    // @TODO: Fix cycle dates to not use 0 for "never"
+    $second_cond->condition("clbu.end", $billing_cycle->start, ">");
+    $second_cond->condition("clbu.end", 0, "=");
+    // Add the combined OR to the AND as a group
+    $time_condition->condition($second_cond);
+
+    // Add this to the main query. These are AND together by default.
+    $query->condition("clbu.license_id", $license->license_id);
+    $query->condition($time_condition);
+    $query->orderBy("clbu.start", "ASC");
+
+    // If anyone feels really fancy, they can alter the query.
+    // This is recommended for usage groups which want to implement custom or
+    // multi-record storage outside of the base cl_billing_usage table.
+    $query->addTag("cl_billing_usage_history_list");
+
+    $usage_history = $query->execute()->fetchAll(PDO::FETCH_ASSOC);
 
     $group_history = array();
     foreach ($usage_history as $usage_record) {
