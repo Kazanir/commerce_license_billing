@@ -220,22 +220,36 @@ class CommerceLicenseBillingCycleTypePeriodic extends CommerceLicenseBillingCycl
     $period = $this->wrapper->pce_period->value();
     // Example: January 15th 2013
     if ($period == 'day') {
-      return date('F jS Y', $end);
+      return $this->formatDate('F jS Y', $end);
     }
 
     if ($async) {
       // Example: January 1st 2013 - January 31st 2013.
-      return date('F jS Y', $start) . ' - ' . date('F jS Y', $end);
+      return $this->formatDate('F jS Y', $start) . ' - ' . $this->formatDate('F jS Y', $end);
     }
     else {
       if ($period == 'week') {
         // Example: January 1st 2013 - January 7th 2013.
-        return date('F jS Y', $start) . ' - ' . date('F jS Y', $end);
+        return $this->formatDate('F jS Y', $start) . ' - ' . $this->formatDate('F jS Y', $end);
       }
       elseif ($period == 'month') {
         // Example: January 2013.
-        return date('F Y');
+        return $this->formatDate('F Y', $start);
       }
     }
+  }
+
+  /**
+   * Format a date with a custom format for display in UTC.
+   *
+   * @see format_date()
+   *
+   * @param string $format
+   * @param int    $timestamp
+   *
+   * @return string
+   */
+  private function formatDate($format, $timestamp) {
+    return format_date($timestamp, 'custom', $format, 'UTC');
   }
 }
