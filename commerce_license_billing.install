@@ -149,6 +149,9 @@ function commerce_license_billing_schema() {
       ),
     ),
     'primary key' => array('usage_id'),
+    'indexes' => array(
+      'license_and_times' => array('license_id', 'start', 'end'),
+    ),
   );
   $schema['cl_scheduled_change'] = array(
     'description' => 'Tracks license changes scheduled for the end of the billing cycle.',
@@ -241,4 +244,13 @@ function commerce_license_billing_update_7101() {
     ),
   );
   field_update_field($field);
+}
+
+/**
+ * Add an index to license_id, start and end for commerce_license_billing_usage_history_list().
+ */
+function commerce_license_billing_update_7102() {
+  if (!db_index_exists('cl_billing_usage', 'license_and_times')) {
+    db_add_index('cl_billing_usage', 'license_and_times', array('license_id', 'start', 'end'));
+  }
 }
