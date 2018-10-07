@@ -22,7 +22,7 @@ interface CommerceLicenseBillingCycleEngineInterface extends EntityBundlePluginP
    *   Passing FALSE allows an unsaved billing cycle entity to be returned
    *   for estimation purposes.
    *
-   * @return
+   * @return \CommerceLicenseBillingCycle
    *   A cl_billing_cycle entity.
    */
   public function getBillingCycle($uid, $start = REQUEST_TIME, $save = TRUE);

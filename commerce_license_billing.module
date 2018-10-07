@@ -1056,7 +1056,6 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
       $billing_cycle_type = entity_load_single('cl_billing_cycle_type', $billing_cycle->type);
       $next_billing_cycle = $billing_cycle_type->getNextBillingCycle($billing_cycle, FALSE);
       $charges[] = array(
-        'license_revision_id' => $license->revision_id,
         'quantity' => 1,
         'commerce_product' => $product_wrapper->value(),
         'commerce_unit_price' => $product_wrapper->commerce_price->value(),
@@ -1067,7 +1066,7 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
     }
   }
   elseif ($product_wrapper->cl_billing_type->value() == 'postpaid') {
-    $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle);
+    $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle->start, $billing_cycle->end);
     // Gather all products.
     $product_ids = array();
     foreach ($plan_history as $history_record) {
@@ -1080,7 +1079,6 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
       $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
       $charges[] = array(
-        'license_revision_id' => $history_record['revision_id'],
         'quantity' => 1,
         'commerce_product' => $product,
         'commerce_unit_price' => $product_wrapper->commerce_price->value(),
@@ -1353,7 +1351,7 @@ function commerce_license_billing_commerce_license_presave($license) {
   $status_changed = ($license->status != $license->original->status);
   if ($product_changed || $status_changed) {
     $license->is_new_revision = TRUE;
-    // Reset the static cache to allow new revision data to show up.
+    // Reset the static cache to allow new plan data to show up.
     drupal_static_reset('commerce_license_billing_plan_history_list');
   }
 }
@@ -1364,10 +1362,12 @@ function commerce_license_billing_commerce_license_presave($license) {
  * Notifies usage groups of revision changes.
  */
 function commerce_license_billing_commerce_license_update($license) {
-  if ($license->is_new_revision && $license instanceof CommerceLicenseBillingUsageInterface) {
+  $product_changed = ($license->product_id != $license->original->product_id);
+  $status_changed = ($license->status != $license->original->status);
+  if (($product_changed || $status_changed) && $license instanceof CommerceLicenseBillingUsageInterface) {
     foreach (array_keys($license->usageGroups()) as $group_name) {
       $usage_group = commerce_license_billing_usage_group($license, $group_name);
-      $usage_group->onRevisionChange();
+      $usage_group->onLicenseChange();
     }
   }
 }
@@ -1560,30 +1560,30 @@ function commerce_license_billing_apply_changes(CommerceLicenseInterface $licens
 }
 
 /**
- * Returns the license plan history for an open billing cycle.
+ * Returns the license plan history for a period of time.
  *
- * @param $license
+ * @param CommerceLicenseInterface $license
  *   The license entity.
- * @param $billing_cycle
- *   The billing cycle entity.
+ * @param int $start
+ *   The start timestamp.
+ * @param int $end
+ *   The end timestamp.
  *
- * @return
+ * @return array
  *   An array of history records in the following format:
- *   - revision_id: The revision_id of the history record.
  *   - product_id: The id of the product representing the plan.
  *   - status: The status of the entry.
  *   - start: The start timestamp.
  *   - end: The end timestamp.
- *   - revision: The loaded revision, so that it doesn't need to be loaded
- *     separately by each usage group (freeQuantities()).
  */
-function commerce_license_billing_plan_history_list(CommerceLicenseInterface $license, $billing_cycle) {
+function commerce_license_billing_plan_history_list(CommerceLicenseInterface $license, $start, $end = NULL) {
   $history = &drupal_static(__FUNCTION__, array());
-  if (!isset($history[$billing_cycle->billing_cycle_id][$license->license_id])) {
+  $cache_key = sprintf('%s:%d:%d', $license->license_id, $start, $end);
+  if (!isset($history[$cache_key])) {
     $data = array(
       ':license_id' => $license->license_id,
-      ':start' => $billing_cycle->start,
-      ':end' => $billing_cycle->end,
+      ':start' => $start,
+      ':end' => $end,
     );
     // Fetch revisions that overlap with this billing cycle. The SQL below
     // encompasses 5 possibilities:
@@ -1612,48 +1612,48 @@ function commerce_license_billing_plan_history_list(CommerceLicenseInterface $li
         continue;
       }
       // Adjust the start and end timestamps for the current billing cycle.
-      if ($history_record['start'] < $billing_cycle->start) {
-        $license_history[$index]['start'] = $billing_cycle->start;
+      if ($history_record['start'] < $start) {
+        $license_history[$index]['start'] = $start;
       }
-      if (empty($history_record['end']) || ($history_record['end'] > $billing_cycle->end)) {
-        $license_history[$index]['end'] = $billing_cycle->end;
+      if (empty($history_record['end']) || ($history_record['end'] > $end)) {
+        $license_history[$index]['end'] = $end;
       }
-      // Load the referenced revision.
-      $license_history[$index]['revision'] = entity_revision_load('commerce_license', $history_record['revision_id']);
     }
     $license_history = array_values($license_history);
 
     // Add the data to the static cache.
-    $history[$billing_cycle->billing_cycle_id][$license->license_id] = $license_history;
+    $history[$cache_key] = $license_history;
   }
 
-  return $history[$billing_cycle->billing_cycle_id][$license->license_id];
+  return $history[$cache_key];
 }
 
 /**
- * Returns the license usage history for an open billing cycle.
+ * Returns the license usage history for a time period.
  *
  * The usage history records are grouped by usage group.
  *
- * @param $license
+ * @param CommerceLicenseBillingUsageInterface $license
  *   The license entity.
- * @param $billing_cycle
- *   The billing cycle entity.
+ * @param int $start
+ *   The start timestamp to filter usage records by.
+ * @param int|NULL $end
+ *   The end timestamp to filter usage records by, or NULL for no end filter.
  *
- * @return
+ * @return array
  *   An array in the group_name => usage_records format, where each usage
  *   record has the following keys:
  *   - product_id: The id of the product representing the plan.
  *   - start: The start timestamp.
  *   - end: The end timestamp.
  */
-function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsageInterface $license, $billing_cycle) {
+function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsageInterface $license, $start, $end = NULL) {
   $history = &drupal_static(__FUNCTION__, array());
-  if (!isset($history[$billing_cycle->billing_cycle_id][$license->license_id])) {
+  if (!isset($history[$license->license_id][$start][$end])) {
     $data = array(
       ':license_id' => $license->license_id,
-      ':start' => $billing_cycle->start,
-      ':end' => $billing_cycle->end,
+      ':start' => $start,
+      ':end' => $end,
     );
     // Fetch usage records that overlap this billing cycle. See
     // commerce_license_billing_plan_history_list for details.
@@ -1670,22 +1670,15 @@ function commerce_license_billing_usage_history_list(CommerceLicenseBillingUsage
 
     $group_history = array();
     foreach ($usage_history as $usage_record) {
-      // Adjust the start and end timestamps for the current billing cycle.
-      if ($usage_record['start'] < $billing_cycle->start) {
-        $usage_record['start'] = $billing_cycle->start;
-      }
-      if (empty($usage_record['end']) || ($usage_record['end'] > $billing_cycle->end)) {
-        $usage_record['end'] = $billing_cycle->end;
-      }
       // Group the records by usage group.
       $group_history[$usage_record['usage_group']][] = $usage_record;
     }
 
     // Add the data to the static cache.
-    $history[$billing_cycle->billing_cycle_id][$license->license_id] = $group_history;
+    $history[$license->license_id][$start][$end] = $group_history;
   }
 
-  return $history[$billing_cycle->billing_cycle_id][$license->license_id];
+  return $history[$license->license_id][$start][$end];
 }
 
 /**
@@ -1720,12 +1713,12 @@ function commerce_license_billing_usage_history_clear($license_ids, $billing_cyc
 /**
  * Returns a usage group plugin.
  *
- * @param $license
+ * @param CommerceLicenseBillingUsageInterface $license
  *   The license entity.
- * @param $group_name
+ * @param string $group_name
  *   The usage group, as defined by $license->usageGroups().
  *
- * @return
+ * @return \CommerceLicenseBillingUsageGroupInterface
  *   An instance of a usage group plugin.
  */
 function commerce_license_billing_usage_group(CommerceLicenseBillingUsageInterface $license, $group_name) {
