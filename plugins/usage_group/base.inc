@@ -23,17 +23,15 @@ interface CommerceLicenseBillingUsageGroupInterface {
   /**
    * Adds a usage record for the given license revision.
    *
-   * @param $revisionId
-   *   The revision_id of the license. Used to price the usage according to the
-   *   active plan.
-   * @param $quantity
+   * @param mixed $quantity
    *   The usage quantity.
-   * @param $start
+   * @param int|NULL $start
    *   Unix timestamp indicating when the usage started.
-   * @param $end
-   *   Unix timestamp indicating when the usage ended.
+   * @param int|NULL $end
+   *   Unix timestamp indicating when the usage ended, or NULL if it has not
+   *   ended.
    */
-  public function addUsage($revisionId, $quantity, $start, $end);
+  public function addUsage($quantity, $start = NULL, $end = NULL);
 
   /**
    * Returns the usage quantity for the provided / current billing cycle.
@@ -73,10 +71,10 @@ interface CommerceLicenseBillingUsageGroupInterface {
   public function isComplete(CommerceLicenseBillingCycle $billingCycle);
 
   /**
-   * Reacts on license revision changes.
+   * Reacts on license changes.
    *
-   * A new revision is created when the license status or plan change,
-   * both of might require matching changes in usage.
+   * This is triggered when the license status or plan change, both of might
+   * require matching changes in usage.
    *
    * This event has access to the previous license in $this->license->original.
    * Key data:
@@ -87,7 +85,7 @@ interface CommerceLicenseBillingUsageGroupInterface {
    *   - previous status: $this->license->original->status
    *   - new status: $this->license->status
    */
-  public function onRevisionChange();
+  public function onLicenseChange();
 
 }
 
@@ -133,18 +131,16 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
   /**
    * Implements CommerceLicenseBillingUsageGroupInterface::addUsage().
    */
-  public function addUsage($revisionId, $quantity, $start, $end) {
-    // Make sure that usage is being registered for an active revision.
-    $revision = entity_revision_load('commerce_license', $revisionId);
-    if ($revision->status != COMMERCE_LICENSE_ACTIVE) {
-      throw new Exception('Tried to register usage for a non-active revision #' . $revisionId);
+  public function addUsage($quantity, $start = NULL, $end = NULL) {
+    if ($start === NULL) {
+      // Default $start to current time.
+      $start = commerce_license_get_time();
     }
 
     // Add the usage record.
     db_insert('cl_billing_usage')
       ->fields(array(
         'license_id' => $this->license->license_id,
-        'revision_id' => $revisionId,
         'usage_group' => $this->groupName,
         'quantity' => $quantity,
         'start' => $start,
@@ -158,11 +154,13 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
 
   /**
    * Implements CommerceLicenseBillingUsageGroupInterface::usageHistory().
+   *
+   * @todo make this take ($start, $end) instead of $billingCycle, so it can look at usage for a plan record's start/end dates
    */
   public function usageHistory(CommerceLicenseBillingCycle $billingCycle) {
     // The procedural function has its own static cache, allowing the history
     // records to be loaded just once per license, not once per group.
-    $usage_history = commerce_license_billing_usage_history_list($this->license, $billingCycle);
+    $usage_history = commerce_license_billing_usage_history_list($this->license, $billingCycle->start, $billingCycle->end);
     return !empty($usage_history[$this->groupName]) ? $usage_history[$this->groupName] : array();
   }
 
@@ -174,7 +172,7 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
     // will be the same as the sum of plan durations.
     // Every plan or usage record ends a second before the next one, so
     // the equation needs to add 1s to each record to get the correct duration.
-    $plan_history = commerce_license_billing_plan_history_list($this->license, $billingCycle);
+    $plan_history = commerce_license_billing_plan_history_list($this->license, $billingCycle->start, $billingCycle->end);
     $plan_duration = 0;
     foreach ($plan_history as $history_record) {
       $plan_duration += ($history_record['end'] - $history_record['start'] + 1);
@@ -191,15 +189,17 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
   /**
    * Implements CommerceLicenseBillingUsageGroupInterface::onRevisionChange().
    */
-  public function onRevisionChange() {}
+  public function onLicenseChange() {}
 
   /**
    * Returns free usage quantities for each plan in the current billing cycle.
    *
-   * @param $billing_cycle
+   * @param CommerceLicenseBillingCycle $billing_cycle
    *   The billing cycle entity.
    *
-   * @return
+   * @todo replace with a method that returns a single free quantity for a given ($start, $end)
+   *
+   * @return array
    *   An array of arrays keyed by revision id, with the keys:
    *   - quantity: The free quantity for this plan.
    *   - start: The start timestamp of the plan.
@@ -207,12 +207,12 @@ abstract class CommerceLicenseBillingUsageGroupBase implements CommerceLicenseBi
    */
   protected function freeQuantities(CommerceLicenseBillingCycle $billingCycle) {
     $free_quantities = array();
-    $plan_history = commerce_license_billing_plan_history_list($this->license, $billingCycle);
+    $plan_history = commerce_license_billing_plan_history_list($this->license, $billingCycle->start, $billingCycle->end);
+    $usage_groups = $this->license->usageGroups();
+    // @todo rewrite this to select the revision for the start/end times specified, and return the right product
     foreach ($plan_history as $history_record) {
-      $revision_usage_groups = $history_record['revision']->usageGroups();
-      $revision_group_info = $revision_usage_groups[$this->groupName];
-      $free_quantities[$history_record['revision_id']] = array(
-        'quantity' => $revision_group_info['free_quantity'],
+      $free_quantities[] = array(
+        'quantity' => $usage_groups[$this->groupName]['free_quantity'],
         'start' => $history_record['start'],
         'end' => $history_record['end'],
       );

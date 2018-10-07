@@ -10,7 +10,7 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
   /**
    * Overrides CommerceLicenseBillingUsageBase::addUsage().
    */
-  public function addUsage($revisionId, $quantity, $start = NULL, $end = NULL) {
+  public function addUsage($quantity, $start = NULL, $end = NULL) {
     if (is_null($start)) {
       // Default $start to current time.
       $start = commerce_license_get_time();
@@ -21,7 +21,7 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
     }
 
     // Open the new usage.
-    parent::addUsage($revisionId, $quantity, $start, $end);
+    parent::addUsage($quantity, $start, $end);
   }
 
   /**
@@ -43,9 +43,7 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
     $current_usage = 0;
     $usage = $this->usageHistory($billingCycle);
     foreach ($usage as $usage_record) {
-      if ($usage_record['revision_id'] <= $this->license->revision_id) {
-        $current_usage += $usage_record['quantity'];
-      }
+      $current_usage += $usage_record['quantity'];
     }
 
     return $current_usage;
@@ -66,6 +64,7 @@ class CommerceLicenseBillingCounterUsageGroup extends CommerceLicenseBillingUsag
     // There could be multiple records per revision, so group them first.
     $counter_totals = array();
     foreach ($usage as $index => $usage_record) {
+      // @todo remove this grouping, it probably doesn't affect the totals?
       $revision_id = $usage_record['revision_id'];
       // Initialize the counter.
       if (!isset($counter_totals[$revision_id])) {

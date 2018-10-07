@@ -22,14 +22,9 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
    * The default behavior ends up being intuitive if only start times are used,
    * but the results are consistent even if specific time periods are inserted
    * out of sequence or need to be updated after their original insertion.
-   *
-   * Note that it is still the responsibility of the caller to call this method
-   * with the appropriate revision IDs -- it is possible to break usage records
-   * by inserting usage for timeframes with the wrong revision ID -- this is
-   * considered a known issue which does not arise in normal use cases.
    */
-  public function addUsage($revisionId, $quantity, $start = NULL, $end = 0) {
-    if (is_null($start)) {
+  public function addUsage($quantity, $start = NULL, $end = NULL) {
+    if ($start === NULL) {
       // Default $start to current time.
       $start = commerce_license_get_time();
     }
@@ -86,7 +81,7 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
     }
 
     // Once this is all finished we insert the new record normally.
-    parent::addUsage($revisionId, $quantity, $start, $end);
+    parent::addUsage($quantity, $start, $end);
 
     unset($txn);
   }
@@ -106,16 +101,14 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
     }
 
     // Get the quantity of the usage record with the highest usage_id
-    // for the current revision and billing cycle.
+    // for the current billing cycle.
     $current_usage = 0;
     $previous_usage_id = 0;
     $usage = $this->usageHistory($billingCycle);
     foreach ($usage as $usage_record) {
-      if ($usage_record['revision_id'] == $this->license->revision_id) {
-        if ($usage_record['usage_id'] > $previous_usage_id) {
-          $current_usage = $usage_record['quantity'];
-          $previous_usage_id = $usage_record['usage_id'];
-        }
+      if ($usage_record['usage_id'] > $previous_usage_id) {
+        $current_usage = $usage_record['quantity'];
+        $previous_usage_id = $usage_record['usage_id'];
       }
     }
 
@@ -150,7 +143,7 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
   /**
    * Implements CommerceLicenseBillingUsageGroupInterface::onRevisionChange().
    */
-  public function onRevisionChange() {
+  public function onLicenseChange() {
     $previous_status = $this->license->original->status;
     $new_status = $this->license->status;
     $current_time = commerce_license_get_time();
@@ -158,7 +151,7 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
     if ($previous_status < COMMERCE_LICENSE_ACTIVE && $new_status == COMMERCE_LICENSE_ACTIVE) {
       $initial_usage = $this->initialUsage();
       if (!is_null($initial_usage)) {
-        $this->addUsage($this->license->revision_id, $initial_usage, $current_time);
+        $this->addUsage($initial_usage, $current_time);
       }
     }
     // A new revision was created, and the previous revision was active.
@@ -193,7 +186,7 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
 
       // If the license is still active, reopen the usage.
       if ($new_status == COMMERCE_LICENSE_ACTIVE && is_numeric($previous_usage)) {
-        $this->addUsage($this->license->revision_id, $previous_usage, $current_time);
+        $this->addUsage($previous_usage, $current_time);
       }
     }
     // A new revision has been created, unsuspending the license. Reopen
@@ -213,7 +206,7 @@ class CommerceLicenseBillingGaugeUsageGroup extends CommerceLicenseBillingUsageG
       // to default to 0 -- we can't send FALSE to addUsage because it will be
       // parametrized as '' and break the db_insert.
       $previous_quantity = ($query->fetchField() ?: 0);
-      $this->addUsage($this->license->revision_id, $previous_quantity, $current_time);
+      $this->addUsage($previous_quantity, $current_time);
     }
   }
 

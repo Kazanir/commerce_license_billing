@@ -49,7 +49,7 @@ function commerce_license_billing_analyze_page($order) {
       '#markup' => $license_details,
     );
 
-    $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle);
+    $plan_history = commerce_license_billing_plan_history_list($license, $billing_cycle->start, $billing_cycle->end);
     $items = array();
     foreach ($plan_history as $history_record) {
       $plan = commerce_product_load($history_record['product_id']);
@@ -58,7 +58,10 @@ function commerce_license_billing_analyze_page($order) {
 
       $item = format_string('%plan', array('%plan' => $plan->title)) . '<br />';
       $item .= format_string('From %start to %end.', array('%start' => $start, '%end' => $end));
-      $item .= commerce_license_billing_build_usage_table($history_record['revision_id'], $license, $billing_cycle);
+      $item .= commerce_license_billing_build_usage_table(
+        commerce_license_billing_usage_history_list($license, $start, $end),
+        $license
+      );
       $items[] = $item;
     }
 
@@ -108,39 +111,31 @@ function commerce_license_billing_build_usage_status($license, $billing_cycle) {
 }
 
 /**
- * Builds and renders the usage records table for a specific license revision.
+ * Builds and renders the usage records table.
  *
- * @param $revision_id
- *   The revision id for which the usage table should be built.
- * @param $license
+ * @param array $usage_history
+ *   The usage history, as returned by
+ *   commerce_license_billing_usage_history_list().
+ * @param \CommerceLicenseBillingUsageInterface $license
  *   The license entity.
- * @param $billing_cycle
- *   The billing cycle entity.
  *
- * @return
- *   The rendered table, or an empty string if the license has no usage groups.
+ * @return string
+ *   The rendered table, or an empty string if the usage history is empty.
  */
-function commerce_license_billing_build_usage_table($revision_id, $license, $billing_cycle) {
-  if (!($license instanceof CommerceLicenseBillingUsageInterface)) {
-    return '';
-  }
-
+function commerce_license_billing_build_usage_table(array $usage_history, $license) {
   $usage_groups = $license->usageGroups();
-  $usage_history = commerce_license_billing_usage_history_list($license, $billing_cycle);
   $attributes = array('style' => 'width: 50%; margin-top: 10px;');
   $header = array(t('Record ID'), t('Usage group'), t('Quantity'), t('Start'), t('End'));
   $rows = array();
   foreach ($usage_history as $group_name => $grouped_records) {
     foreach ($grouped_records as $usage_record) {
-      if ($usage_record['revision_id'] == $revision_id) {
-        $row = array();
-        $row[] = $usage_record['usage_id'];
-        $row[] = $usage_groups[$group_name]['title'];
-        $row[] = $usage_record['quantity'];
-        $row[] = format_date($usage_record['start'], 'short');
-        $row[] = format_date($usage_record['end'], 'short');
-        $rows[] = $row;
-      }
+      $row = array();
+      $row[] = $usage_record['usage_id'];
+      $row[] = $usage_groups[$group_name]['title'];
+      $row[] = $usage_record['quantity'];
+      $row[] = format_date($usage_record['start'], 'short');
+      $row[] = format_date($usage_record['end'], 'short');
+      $rows[] = $row;
     }
   }
   $table = theme('table', array('header' => $header, 'rows' => $rows, 'attributes' => $attributes));
