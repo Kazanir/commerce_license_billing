@@ -134,6 +134,21 @@ function hook_commerce_license_billing_order_refresh_alter($order, &$line_items,
 }
 
 /**
+ * Allows modules to modify the generated charges or create new charges without
+ * the need for database storage or a usage group on the licenses.
+ *
+ * @param $charges
+ *   Generated list of charges.
+ * @param $license
+ *   The license object.
+ * @param $billing_cycle
+ *   The billing cycle.
+ */
+function hook_commerce_license_billing_collect_charges_alter($charges, $license, $billing_cycle) {
+
+}
+
+/**
  * Allows modules to intervene and prevent an order from being refreshed during
  * a web request. (By default, orders whose refresh is "denied" in this way
  * have a refresh queued via AdvancedQueue. See the drupal.org documentation
