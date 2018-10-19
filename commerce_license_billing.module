@@ -1117,6 +1117,8 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
     }
   }
 
+  drupal_alter('commerce_license_billing_collect_charges', $charges, $license, $billing_cycle);
+
   return $charges;
 }
 
