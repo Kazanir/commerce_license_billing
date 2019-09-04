@@ -1,0 +1,2 @@
+*.module linguist-language=php
+*.install linguist-language=php
