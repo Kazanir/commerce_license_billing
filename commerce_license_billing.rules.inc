@@ -183,6 +183,12 @@ function commerce_license_billing_prorate_product_line_item_action($line_item) {
  */
 function commerce_license_billing_prorate_recurring_line_item_action($line_item) {
   $line_item_wrapper = entity_metadata_wrapper('commerce_line_item', $line_item);
+
+  // Don't fire this rule even if requested for line items which use quantity-based pro-rating.
+  if ($line_item_wrapper->cl_billing_raw_quantity->value()) {
+    return;
+  }
+
   $billing_start = $line_item_wrapper->cl_billing_start->value();
   $billing_end = $line_item_wrapper->cl_billing_end->value();
   $duration = $billing_end - $billing_start;
