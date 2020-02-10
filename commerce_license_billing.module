@@ -1111,7 +1111,7 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
           //   is it not always relevant.
           'license_revision_id' => (isset($usage_record['revision_id']) ? $usage_record['revision_id'] : NULL),
           'commerce_product' => $product,
-          'raw_quantity' => $usage_record['quantity'],
+          'cl_billing_raw_quantity' => $usage_record['quantity'],
           'commerce_unit_price' => $product_wrapper->commerce_price->value(),
           'cl_billing_start' => $usage_record['start'],
           'cl_billing_end' => $usage_record['end'],
