@@ -1012,6 +1012,12 @@ function commerce_license_billing_populate_line_item($line_item, $charge) {
     $line_item->data['license_revision_id'] = $charge['license_revision_id'];
   }
 
+  // Set the raw quantity if used.
+  if (!empty($charge['cl_billing_raw_quantity'])) {
+    $line_item_wrapper->cl_billing_raw_quantity = $charge['cl_billing_raw_quantity'];
+    $line_item_wrapper->cl_billing_proration = $charge['cl_billing_proration'];
+  }
+
   // Trigger price calculation to get any needed discounts or price changes.
   commerce_license_billing_invoke_pricing_event($line_item);
 }
