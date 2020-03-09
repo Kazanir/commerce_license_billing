@@ -1146,7 +1146,7 @@ function commerce_license_billing_prorate_charge($charge, $billing_cycle) {
   $proration = round($duration / $cycle, variable_get('cl_billing_proration_scale', 4));
 
   $charge['cl_billing_proration'] = $proration;
-  $charge['quantity'] = round($charge['cl_billing_raw_quantity'] * $proration, 2);
+  $charge['quantity'] = round($charge['cl_billing_raw_quantity'] * $proration, 3);
 
   return $charge;
 }
