@@ -196,6 +196,13 @@ function commerce_license_billing_schema() {
 }
 
 /**
+ * Implements hook_schema_alter().
+ */
+function commerce_license_billing_schema_alter(&$schemas) {
+  $schemas['commerce_line_item']['fields']['quantity']['scale'] = 3;
+}
+
+/**
  * Implements hook_install().
  */
 function commerce_license_billing_install() {
@@ -252,5 +259,19 @@ function commerce_license_billing_update_7101() {
 function commerce_license_billing_update_7102() {
   if (!db_index_exists('cl_billing_usage', 'license_and_times')) {
     db_add_index('cl_billing_usage', 'license_and_times', array('license_id', 'start', 'end'));
+  }
+}
+
+/**
+ * Change the scale of the {commerce_line_item}.quantity field to 3.
+ */
+function commerce_license_billing_update_7103() {
+  $schema = drupal_get_schema_unprocessed('commerce_line_item');
+  if (db_field_exists('commerce_line_item', 'quantity')) {
+    $schema = drupal_get_schema_unprocessed('commerce_line_item')['commerce_line_item'];
+    $schema['fields']['quantity']['scale'] = 3;
+    db_change_field('commerce_line_item', 'quantity', 'quantity', $schema['fields']['quantity']);
+
+    return "Updated quantity column.";
   }
 }

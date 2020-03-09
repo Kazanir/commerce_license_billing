@@ -1012,6 +1012,12 @@ function commerce_license_billing_populate_line_item($line_item, $charge) {
     $line_item->data['license_revision_id'] = $charge['license_revision_id'];
   }
 
+  // Set the raw quantity if used.
+  if (!empty($charge['cl_billing_raw_quantity'])) {
+    $line_item_wrapper->cl_billing_raw_quantity = $charge['cl_billing_raw_quantity'];
+    $line_item_wrapper->cl_billing_proration = $charge['cl_billing_proration'];
+  }
+
   // Trigger price calculation to get any needed discounts or price changes.
   commerce_license_billing_invoke_pricing_event($line_item);
 }
@@ -1079,15 +1085,20 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
       $product = $products[$history_record['product_id']];
       $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
-      $charges[] = array(
+      $charge = array(
         'license_revision_id' => $history_record['revision_id'],
-        'quantity' => 1,
+        'cl_billing_raw_quantity' => 1,
         'commerce_product' => $product,
         'commerce_unit_price' => $product_wrapper->commerce_price->value(),
         'cl_billing_start' => $history_record['start'],
         'cl_billing_end' => $history_record['end'],
         'match' => array('commerce_product', 'cl_billing_start'),
       );
+
+      // Pro-rate the charge here.
+      $charge = commerce_license_billing_prorate_charge($charge, $billing_cycle);
+
+      $charges[] = $charge;
     }
   }
 
@@ -1101,23 +1112,43 @@ function commerce_license_billing_collect_charges(CommerceLicenseInterface $lice
         $product = commerce_product_load_by_sku($group_info['product']);
         $product_wrapper = entity_metadata_wrapper('commerce_product', $product);
 
-        $charges[] = array(
+        $charge = array(
           // Not all usage records supply the revision ID of the license, as
           //   is it not always relevant.
           'license_revision_id' => (isset($usage_record['revision_id']) ? $usage_record['revision_id'] : NULL),
           'commerce_product' => $product,
-          'quantity' => $usage_record['quantity'],
+          'cl_billing_raw_quantity' => $usage_record['quantity'],
           'commerce_unit_price' => $product_wrapper->commerce_price->value(),
           'cl_billing_start' => $usage_record['start'],
           'cl_billing_end' => $usage_record['end'],
           'match' => array('commerce_product', 'cl_billing_start'),
           'usage_group' => $usage_record['usage_group'],
         );
+
+        // Pro-rate the charge here.
+        $charge = commerce_license_billing_prorate_charge($charge, $billing_cycle);
+
+        $charges[] = $charge;
       }
     }
   }
 
   return $charges;
+}
+
+/**
+ * Pro-rate a charge object according to the billing cycle.
+ */
+function commerce_license_billing_prorate_charge($charge, $billing_cycle) {
+  $duration = $charge['cl_billing_end'] - $charge['cl_billing_start'];
+  $cycle = $billing_cycle->end - $billing_cycle->start;
+
+  $proration = round($duration / $cycle, variable_get('cl_billing_proration_scale', 4));
+
+  $charge['cl_billing_proration'] = $proration;
+  $charge['quantity'] = round($charge['cl_billing_raw_quantity'] * $proration, 3);
+
+  return $charge;
 }
 
 /**
@@ -2019,6 +2050,66 @@ function commerce_license_billing_configure_line_item_type() {
       'entity_type' => 'commerce_line_item',
       'bundle' => 'recurring',
       'label' => 'License',
+      'required' => TRUE,
+    );
+
+    field_create_instance($instance);
+  }
+
+  $field = field_info_field('cl_billing_proration');
+  if (!$field) {
+    $field = array(
+      'settings' => array(
+        'handler' => 'base',
+        'target_type' => 'commerce_license',
+      ),
+      'field_name' => 'cl_billing_proration',
+      'type' => 'number_decimal',
+      'settings' => array(
+        'precision' => 10,
+        'scale' => variable_get('cl_billing_proration_scale', 4),
+        'decimal_separator' => '.',
+      ),
+    );
+    field_create_field($field);
+  }
+  $instance = field_info_instance('commerce_line_item', 'cl_billing_proration', 'recurring');
+  if (empty($instance)) {
+    $instance = array(
+      'field_name' => 'cl_billing_proration',
+      'entity_type' => 'commerce_line_item',
+      'bundle' => 'recurring',
+      'label' => 'Proration Multiplier',
+      'required' => TRUE,
+    );
+
+    field_create_instance($instance);
+  }
+
+  $field = field_info_field('cl_billing_raw_quantity');
+  if (!$field) {
+    $field = array(
+      'settings' => array(
+        'handler' => 'base',
+        'target_type' => 'commerce_license',
+      ),
+      'field_name' => 'cl_billing_raw_quantity',
+      'type' => 'number_decimal',
+      'settings' => array(
+        'precision' => 10,
+        'scale' => 2,
+        'decimal_separator' => '.',
+      ),
+    );
+    field_create_field($field);
+  }
+  $instance = field_info_instance('commerce_line_item', 'cl_billing_raw_quantity', 'recurring');
+  if (empty($instance)) {
+    $instance = array(
+      'field_name' => 'cl_billing_raw_quantity',
+      'entity_type' => 'commerce_line_item',
+      'bundle' => 'recurring',
+      'label' => 'Raw Quantity',
       'required' => TRUE,
     );
 
